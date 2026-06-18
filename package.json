@@ -1,0 +1,24 @@
+{
+  "name": "keycap-logo-generator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Place an SVG logo on a keycap and export a two-color 3MF for face-down printing.",
+  "scripts": {
+    "convert": "node scripts/convert-keycap.mjs",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2",
+    "manifold-3d": "^3.5.1",
+    "three": "^0.169.0",
+    "three-bvh-csg": "^0.0.16",
+    "three-mesh-bvh": "^0.7.8"
+  },
+  "devDependencies": {
+    "occt-import-js": "^0.0.23",
+    "vite": "^5.4.0"
+  }
+}
