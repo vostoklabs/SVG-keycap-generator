@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Keycap Logo Generator</title>
+    <title>Keycap Legend Generator</title>
     <style>
       :root {
         --bg: #15171c;
@@ -26,8 +26,8 @@
         grid-template-rows: 100vh;
         overflow: hidden;
       }
-      #viewport { position: relative; }
-      #viewport canvas { display: block; }
+      #viewport { position: relative; min-width: 0; overflow: hidden; }
+      #viewport canvas { display: block; width: 100%; height: 100%; }
       #hint {
         position: absolute; left: 14px; bottom: 12px; color: var(--muted);
         font-size: 12px; pointer-events: none; user-select: none;
@@ -48,6 +48,16 @@
       .section { border-top: 1px solid var(--line); padding: 14px 0; }
       .section:first-of-type { border-top: none; padding-top: 0; }
       .label { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 8px; }
+      .tabs {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px;
+        background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 4px;
+      }
+      .tab {
+        border: 0; border-radius: 6px; background: transparent; color: var(--muted);
+        padding: 7px 8px; cursor: pointer; font: inherit; font-size: 12px;
+      }
+      .tab.active { background: var(--accent); color: #08122a; font-weight: 600; }
+      .mode-panel[hidden] { display: none; }
 
       #gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
       .icon {
@@ -63,6 +73,7 @@
         font-size: 12px; color: var(--accent); cursor: pointer;
       }
       .upload input { display: none; }
+      .field .upload { margin-top: 0; }
 
       .row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
       .row label { flex: 0 0 88px; color: var(--muted); font-size: 12px; }
@@ -72,6 +83,12 @@
         width: 56px; background: var(--panel-2); border: 1px solid var(--line);
         color: var(--text); border-radius: 6px; padding: 3px 6px; text-align: right;
         font-variant-numeric: tabular-nums;
+      }
+      .field { display: grid; gap: 6px; margin-bottom: 10px; }
+      .field label { color: var(--muted); font-size: 12px; }
+      .field input, .field select {
+        width: 100%; background: var(--panel-2); border: 1px solid var(--line);
+        color: var(--text); border-radius: 7px; padding: 8px 9px; font: inherit;
       }
       .colors { display: flex; gap: 18px; }
       .color { display: flex; align-items: center; gap: 8px; }
@@ -101,16 +118,36 @@
     </div>
 
     <aside>
-      <h1>Keycap Logo Generator</h1>
-      <div class="sub">Pick an icon, size it, export a two-color 3MF.</div>
+      <h1>Keycap Legend Generator</h1>
+      <div class="sub">Pick an icon or letter, size it, export a two-color 3MF.</div>
 
       <div class="section">
-        <div class="label">Icon</div>
-        <div id="gallery"></div>
-        <label class="upload">
-          + Upload SVG(s)
-          <input id="upload" type="file" accept=".svg,image/svg+xml" multiple />
-        </label>
+        <div class="label">Legend</div>
+        <div class="tabs" role="tablist" aria-label="Legend type">
+          <button id="iconMode" class="tab active" type="button">Icon</button>
+          <button id="letterMode" class="tab" type="button">Letter</button>
+        </div>
+        <div id="iconPanel" class="mode-panel">
+          <div id="gallery"></div>
+          <label class="upload">
+            + Upload SVG(s)
+            <input id="upload" type="file" accept=".svg,image/svg+xml" multiple />
+          </label>
+        </div>
+        <div id="letterPanel" class="mode-panel" hidden>
+          <div class="field">
+            <label for="letterText">Letter</label>
+            <input id="letterText" type="text" value="A" maxlength="3" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="field">
+            <label for="fontSelect">Font</label>
+            <select id="fontSelect"></select>
+            <label class="upload">
+              + Import font
+              <input id="fontUpload" type="file" accept=".ttf,.otf,.json,font/ttf,font/otf,application/json" />
+            </label>
+          </div>
+        </div>
       </div>
 
       <div class="section">
@@ -147,7 +184,7 @@
         <div class="label">Colors (preview &amp; 3MF)</div>
         <div class="colors">
           <div class="color"><input id="capColor" type="color" value="#1c1c1e" /> Keycap</div>
-          <div class="color"><input id="logoColor" type="color" value="#f2f2f2" /> Logo</div>
+          <div class="color"><input id="logoColor" type="color" value="#f2f2f2" /> Legend</div>
         </div>
       </div>
 

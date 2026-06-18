@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { loadKeycap } from './keycap.js';
 import { parseSvg, logoFootprint } from './logo.js';
+import { FONT_OPTIONS, importFontFile, parseLetter } from './letter.js';
 import { buildBodies } from './geometry.js';
 import { initManifold } from './manifold.js';
 import { buildThreeMF } from './export3mf.js';
@@ -67,8 +68,10 @@ new ResizeObserver(resize).observe(viewport);
 // ---------------------------------------------------------------- state
 let meta = null;            // keycap metadata from convert step
 let keycapGeometry = null;  // original cap geometry (native mm)
-let currentIcon = null;     // { shapes, box, name }
+let currentLegend = null;   // { contours, box, name }
 let lastBodies = null;      // { keycapGeometry, logoGeometry } for export
+let lastIconSelection = null;
+let currentMode = 'icon';
 
 // debug handles (harmless; used for automated verification)
 window.__app = {
@@ -123,16 +126,16 @@ function scheduleRegen() {
 }
 
 async function doRegen() {
-  if (!currentIcon) return;
+  if (!currentLegend || !meta || !keycapGeometry) return;
   if (running) { scheduleRegen(); return; }
   running = true;
   busyEl.style.display = 'block';
   await new Promise((r) => setTimeout(r, 0)); // let the spinner paint
 
   try {
-    const fp = logoFootprint(currentIcon.box, C.size.get());
+    const fp = logoFootprint(currentLegend.box, C.size.get());
     const { keycapGeometry: capG, logoGeometry: logoG, surfaceVariation } =
-      await buildBodies(keycapGeometry, meta, currentIcon, currentOpts());
+      await buildBodies(keycapGeometry, meta, currentLegend, currentOpts());
 
     capMesh.geometry?.dispose();
     logoMesh.geometry?.dispose();
@@ -143,15 +146,16 @@ async function doRegen() {
     $('export').disabled = false;
     const room = Math.min(meta.topExtent[0], meta.topExtent[1]);
     if (Math.max(fp.w, fp.h) > room) {
-      setStatus(`Heads up: logo (${fp.w.toFixed(1)}×${fp.h.toFixed(1)} mm) is larger than the top (~${room.toFixed(1)} mm) and will be clipped.`, 'warn');
+      setStatus(`Heads up: legend (${fp.w.toFixed(1)}×${fp.h.toFixed(1)} mm) is larger than the top (~${room.toFixed(1)} mm) and will be clipped.`, 'warn');
     } else if (surfaceVariation > 0.4) {
-      setStatus(`Ready · logo ${fp.w.toFixed(1)}×${fp.h.toFixed(1)} mm. Note: top is curved (${surfaceVariation.toFixed(1)} mm) — keep the logo small so it stays flush.`, 'warn');
+      setStatus(`Ready · legend ${fp.w.toFixed(1)}×${fp.h.toFixed(1)} mm. Note: top is curved (${surfaceVariation.toFixed(1)} mm) — keep it small so it stays flush.`, 'warn');
     } else {
-      setStatus(`Ready · logo ${fp.w.toFixed(1)}×${fp.h.toFixed(1)} mm · ${C.depth.get()} mm deep.`);
+      setStatus(`Ready · legend ${fp.w.toFixed(1)}×${fp.h.toFixed(1)} mm · ${C.depth.get()} mm deep.`);
     }
   } catch (e) {
     console.error(e);
-    setStatus('Could not generate this logo (try a simpler icon or smaller size).', 'err');
+    $('export').disabled = true;
+    setStatus('Could not generate this legend (try a simpler icon/letter or smaller size).', 'err');
   } finally {
     busyEl.style.display = 'none';
     running = false;
@@ -164,7 +168,8 @@ async function selectIcon(el, getText, name) {
   el.classList.add('active');
   setStatus('Loading icon…');
   try {
-    currentIcon = { ...parseSvg(await getText()), name };
+    currentLegend = { ...parseSvg(await getText()), name };
+    lastIconSelection = { el, getText, name };
     doRegen();
   } catch (e) {
     console.error(e);
@@ -184,6 +189,66 @@ function addIcon(thumbUrl, getText, name) {
   $('gallery').appendChild(el);
   return el;
 }
+
+function setLegendMode(mode) {
+  const isLetter = mode === 'letter';
+  currentMode = mode;
+  $('iconMode').classList.toggle('active', !isLetter);
+  $('letterMode').classList.toggle('active', isLetter);
+  $('iconPanel').hidden = isLetter;
+  $('letterPanel').hidden = !isLetter;
+
+  if (isLetter) {
+    selectLetter();
+  } else if (lastIconSelection) {
+    selectIcon(lastIconSelection.el, lastIconSelection.getText, lastIconSelection.name);
+  }
+}
+
+function selectLetter() {
+  document.querySelectorAll('.icon.active').forEach((n) => n.classList.remove('active'));
+  try {
+    currentLegend = parseLetter($('letterText').value, $('fontSelect').value);
+    setStatus('Generating letter…');
+    scheduleRegen();
+  } catch (e) {
+    console.error(e);
+    currentLegend = null;
+    $('export').disabled = true;
+    setStatus(e.message || 'Could not read this letter.', 'err');
+  }
+}
+
+function addFontOption(font) {
+  const option = document.createElement('option');
+  option.value = font.id;
+  option.textContent = font.name;
+  $('fontSelect').appendChild(option);
+}
+
+for (const font of FONT_OPTIONS) addFontOption(font);
+
+$('iconMode').addEventListener('click', () => setLegendMode('icon'));
+$('letterMode').addEventListener('click', () => setLegendMode('letter'));
+$('letterText').addEventListener('input', selectLetter);
+$('fontSelect').addEventListener('change', selectLetter);
+
+$('fontUpload').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const font = await importFontFile(file);
+    addFontOption(font);
+    $('fontSelect').value = font.id;
+    setLegendMode('letter');
+    setStatus(`Imported font: ${font.name}`);
+  } catch (error) {
+    console.error(error);
+    setStatus('Could not import this font. Try a TTF, OTF, or typeface JSON file.', 'err');
+  } finally {
+    e.target.value = '';
+  }
+});
 
 async function loadGallery() {
   const list = await fetch('icons-manifest.json').then((r) => r.json()).catch(() => []);
@@ -216,7 +281,7 @@ $('export').addEventListener('click', () => {
   });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `keycap-${(currentIcon?.name || 'logo').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.3mf`;
+  a.download = `keycap-${(currentLegend?.name || 'legend').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.3mf`;
   a.click();
   URL.revokeObjectURL(a.href);
   setStatus('Exported 3MF ✓  Open in your slicer and assign two filaments.');
@@ -245,8 +310,10 @@ $('export').addEventListener('click', () => {
     $('meta').textContent = `Cap ${(meta.bbox.max[0] - meta.bbox.min[0]).toFixed(1)}×${(meta.bbox.max[1] - meta.bbox.min[1]).toFixed(1)}×${meta.topZ.toFixed(1)} mm · ${meta.triangles} tris · from ${meta.generatedFrom}`;
 
     const firstIcon = await loadGallery();
-    if (firstIcon) {
+    if (firstIcon && currentMode === 'icon') {
       selectIcon(firstIcon.el, () => fetch(firstIcon.file).then((r) => r.text()), firstIcon.name);
+    } else if (currentMode === 'letter') {
+      selectLetter();
     } else {
       setStatus('Add SVG files to public/icons, or use Upload.');
     }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
-import { initManifold, geomToManifold, manifoldToGeom, extrudePrism } from './manifold.js';
+import { initManifold, geomToManifold, manifoldToGeom, extrudePrism, extrudeStrokeGeom } from './manifold.js';
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
@@ -24,13 +24,50 @@ function transformContours(contours, box, { widthMM, centerX, centerY, rotationD
   );
 }
 
-// Lowest/highest cap-surface height under the logo footprint (rays straight down).
-function sampleSurface(capGeom, contours, topZ) {
+/**
+ * Apply the same center/scale/flip/rotate/translate as transformContours but to a
+ * THREE.BufferGeometry (used for stroke-ribbon geometries from SVGLoader.pointsToStroke).
+ * Returns a cloned geometry with transformed XY positions; Z is left at 0.
+ */
+function transformStrokeGeom(geom, box, { widthMM, centerX, centerY, rotationDeg, mirror }) {
+  const cx = (box.min.x + box.max.x) / 2;
+  const cy = (box.min.y + box.max.y) / 2;
+  const span = Math.max(box.max.x - box.min.x, box.max.y - box.min.y) || 1;
+  const s = widthMM / span;
+  const sx = s * (mirror ? -1 : 1);
+  const a = (rotationDeg * Math.PI) / 180;
+  const ca = Math.cos(a), sa = Math.sin(a);
+
+  const clone = geom.clone();
+  const pos = clone.getAttribute('position');
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i);
+    const X = (x - cx) * sx;
+    const Y = (y - cy) * -s;
+    pos.setXY(i, X * ca - Y * sa + centerX, X * sa + Y * ca + centerY);
+  }
+  pos.needsUpdate = true;
+  return clone;
+}
+
+// Lowest/highest cap-surface height under the legend footprint (rays straight down).
+// Accepts both contour arrays and transformed stroke BufferGeometries to build the AABB.
+function sampleSurface(capGeom, contours, strokeGeoms, topZ) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
   for (const c of contours) for (const [x, y] of c) {
     minX = Math.min(minX, x); maxX = Math.max(maxX, x);
     minY = Math.min(minY, y); maxY = Math.max(maxY, y);
   }
+  for (const sg of strokeGeoms) {
+    const pos = sg.getAttribute('position');
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i);
+      minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+    }
+  }
+
   if (!capGeom.boundsTree) capGeom.computeBoundsTree();
   const mesh = new THREE.Mesh(capGeom);
   const rc = new THREE.Raycaster();
@@ -52,6 +89,7 @@ function sampleSurface(capGeom, contours, topZ) {
  * Split the keycap into two watertight, mating bodies with the Manifold engine.
  *
  *   prism      = logo silhouette extruded from (lowestSurface - depth) up past the top.
+ *                May be a union of a fill prism + one or more stroke solids.
  *   logoBody   = cap ∩ prism  -> top IS the real cap surface (follows any curvature),
  *                               >= depth thick, smooth.
  *   keycapBody = cap − prism  -> the exact matching pocket.
@@ -61,19 +99,41 @@ function sampleSurface(capGeom, contours, topZ) {
  */
 export async function buildBodies(capGeom, meta, icon, opts) {
   await initManifold();
-  const contours = transformContours(icon.contours, icon.box, opts);
-  const { lo, hi } = sampleSurface(capGeom, contours, meta.topZ);
+
+  const contours    = icon.contours.length
+    ? transformContours(icon.contours, icon.box, opts)
+    : [];
+  const strokeGeoms = (icon.strokeGeoms || []).map(g => transformStrokeGeom(g, icon.box, opts));
+
+  const { lo, hi } = sampleSurface(capGeom, contours, strokeGeoms, meta.topZ);
 
   const bottomZ = lo - opts.depth;
-  const height = meta.topZ + 3 - bottomZ;
+  const height  = meta.topZ + 3 - bottomZ;
 
   const cap = geomToManifold(capGeom);
-  const prism = extrudePrism(contours, bottomZ, height);
-  const logoM = cap.intersect(prism);
-  const bodyM = cap.subtract(prism);
 
-  const logoGeometry = manifoldToGeom(logoM);
-  const keycapGeometry = manifoldToGeom(bodyM);
+  // Build the prism: start with fill contours (if any), then union in each stroke solid.
+  let prism = contours.length ? extrudePrism(contours, bottomZ, height) : null;
+
+  for (const sg of strokeGeoms) {
+    const strokeSolid = extrudeStrokeGeom(sg, bottomZ, height);
+    if (prism) {
+      const united = prism.add(strokeSolid);
+      prism.delete();
+      strokeSolid.delete();
+      prism = united;
+    } else {
+      prism = strokeSolid;
+    }
+  }
+
+  if (!prism) throw new Error('No geometry to extrude for this icon.');
+
+  const logoM  = cap.intersect(prism);
+  const bodyM  = cap.subtract(prism);
+
+  const logoGeometry    = manifoldToGeom(logoM);
+  const keycapGeometry  = manifoldToGeom(bodyM);
 
   cap.delete(); prism.delete(); logoM.delete(); bodyM.delete();
   return { keycapGeometry, logoGeometry, surfaceVariation: hi - lo };

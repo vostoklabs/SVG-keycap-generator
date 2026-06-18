@@ -26,7 +26,7 @@ function meshXml(geom) {
 const color3mf = (hex) => (hex.replace('#', '#').toUpperCase() + 'FF').replace('##', '#');
 
 /**
- * Build a two-material 3MF: the keycap and the logo as separate colored parts,
+ * Build a two-material 3MF: the keycap and the legend as separate colored parts,
  * assembled (via components) so they stay aligned and each maps to a filament
  * in PrusaSlicer / OrcaSlicer / Bambu Studio.
  */
@@ -39,7 +39,7 @@ export function buildThreeMF(keycapGeom, logoGeom, { keycapColor, logoColor }) {
     `<resources>` +
     `<basematerials id="1">` +
     `<base name="Keycap" displaycolor="${color3mf(keycapColor)}"/>` +
-    `<base name="Logo" displaycolor="${color3mf(logoColor)}"/>` +
+    `<base name="Legend" displaycolor="${color3mf(logoColor)}"/>` +
     `</basematerials>` +
     `<object id="2" type="model" pid="1" pindex="0">${meshXml(keycapGeom)}</object>` +
     `<object id="3" type="model" pid="1" pindex="1">${meshXml(logoGeom)}</object>` +
