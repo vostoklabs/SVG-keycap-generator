@@ -161,10 +161,32 @@
       #status.err { color: #f0726a; }
       .meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
       code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+
+      .kofi {
+        position: absolute; top: 14px; left: 14px; z-index: 5;
+        display: inline-flex; align-items: center; gap: 7px;
+        padding: 7px 12px;
+        background: rgba(29,32,39,.78); backdrop-filter: blur(4px);
+        border: 1px solid var(--line); border-radius: 20px; color: var(--muted);
+        text-decoration: none; font-size: 12px; font-weight: 500;
+        transition: color .12s, border-color .12s, background .12s;
+      }
+      .kofi:hover { color: #ff5e5b; border-color: #ff5e5b; background: rgba(29,32,39,.95); }
+      .kofi svg { flex: 0 0 16px; color: #ff5e5b; }
     </style>
   </head>
   <body>
     <div id="viewport">
+      <a id="kofi" class="kofi" href="https://ko-fi.com/vostoklabs" target="_blank" rel="noopener" title="Support this tool on Ko-fi">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
+          <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z"/>
+          <line x1="6" y1="2" x2="6" y2="4"/>
+          <line x1="10" y1="2" x2="10" y2="4"/>
+          <line x1="14" y1="2" x2="14" y2="4"/>
+        </svg>
+        Support on Ko-fi
+      </a>
       <div id="busy">generating…</div>
       <div id="hint">drag to orbit · scroll to zoom · right-drag to pan</div>
     </div>
@@ -243,6 +265,9 @@
           <span class="val"><input id="offyNum" type="number" step="0.1" /> mm</span>
         </div>
         <label class="check"><input id="mirror" type="checkbox" /> Mirror horizontally</label>
+        <label class="check" title="Extrude the legend through the whole top wall and print the stem in the legend filament too — use a transparent filament so it lights up.">
+          <input id="through" type="checkbox" /> Enable Shine through
+        </label>
       </div>
 
       <div class="section">

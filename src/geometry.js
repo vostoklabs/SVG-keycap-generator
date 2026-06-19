@@ -107,7 +107,11 @@ export async function buildBodies(capGeom, meta, icon, opts) {
 
   const { lo, hi } = sampleSurface(capGeom, contours, strokeGeoms, meta.topZ);
 
-  const bottomZ = lo - opts.depth;
+  // Shine-through mode: extrude the prism the full height of the (now hollow, stem-removed)
+  // shell so the legend punches clean through the top wall into the cavity — a light pipe in
+  // transparent filament. With the stem gone there's no central material to leave ribbons on.
+  const capBottomZ = meta.bbox.min[2];
+  const bottomZ = opts.through ? capBottomZ - 1 : lo - opts.depth;
   const height  = meta.topZ + 3 - bottomZ;
 
   const cap = geomToManifold(capGeom);

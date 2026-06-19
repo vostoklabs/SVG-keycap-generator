@@ -26,53 +26,60 @@ function meshXml(geom) {
 const color3mf = (hex) => (hex.replace('#', '#').toUpperCase() + 'FF').replace('##', '#');
 
 /**
- * Build a two-material 3MF that loads as a SINGLE model with two parts.
+ * Build a multi-material 3MF that loads as a SINGLE model with N parts.
  *
- *  - The geometry is structured as object 4 (a <components> wrapper) referencing
- *    object 2 (keycap) and object 3 (legend). Bambu Studio / OrcaSlicer pick this
- *    up as "one object with two parts", matching the user's preferred import UX.
- *  - A <basematerials> resource with per-object pid/pindex gives spec-compliant
- *    slicers (PrusaSlicer + the 3MF base extension) a color hint.
- *  - Bambu Studio / OrcaSlicer ignore basematerials for filament assignment and
- *    instead read Metadata/model_settings.config, where we map each part to a
- *    distinct extruder slot (1 = keycap, 2 = legend). Without this file both
- *    parts default to extruder 1 and render in the same color.
+ * @param {Array<{name:string, color:string, extruder:number, geom:THREE.BufferGeometry}>} parts
+ *        One entry per body. Order is preserved. `extruder` is the 1-based filament slot
+ *        (1 = keycap colour, 2 = legend colour); the stem rides on slot 2 in shine-through.
+ *
+ *  - Each part is its own <object> (ids 2..N+1); a <components> wrapper (id N+2) references
+ *    them all so Bambu Studio / OrcaSlicer import it as "one object with N parts".
+ *  - A <basematerials> resource (per-object pid/pindex) gives spec-compliant slicers
+ *    (PrusaSlicer + the 3MF base extension) a colour hint.
+ *  - Bambu/Orca ignore basematerials for filament assignment and read
+ *    Metadata/model_settings.config instead, where each part maps to its extruder slot.
  */
-export function buildThreeMF(keycapGeom, logoGeom, { keycapColor, logoColor }) {
+export function buildThreeMF(parts) {
+  const wrapperId = parts.length + 2; // parts use ids 2..N+1, wrapper is N+2
+
+  const baseMaterials = parts
+    .map((p) => `<base name="${p.name}" displaycolor="${color3mf(p.color)}"/>`)
+    .join('');
+  const objects = parts
+    .map((p, i) => `<object id="${i + 2}" type="model" pid="1" pindex="${i}">${meshXml(p.geom)}</object>`)
+    .join('');
+  const components = parts.map((_, i) => `<component objectid="${i + 2}"/>`).join('');
+
   const model =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<model unit="millimeter" xml:lang="en-US"` +
     ` xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"` +
     ` xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">` +
     `<resources>` +
-    `<basematerials id="1">` +
-    `<base name="Keycap" displaycolor="${color3mf(keycapColor)}"/>` +
-    `<base name="Legend" displaycolor="${color3mf(logoColor)}"/>` +
-    `</basematerials>` +
-    `<object id="2" type="model" pid="1" pindex="0">${meshXml(keycapGeom)}</object>` +
-    `<object id="3" type="model" pid="1" pindex="1">${meshXml(logoGeom)}</object>` +
-    `<object id="4" type="model"><components>` +
-    `<component objectid="2"/><component objectid="3"/>` +
-    `</components></object>` +
+    `<basematerials id="1">${baseMaterials}</basematerials>` +
+    objects +
+    `<object id="${wrapperId}" type="model"><components>${components}</components></object>` +
     `</resources>` +
-    `<build><item objectid="4"/></build>` +
+    `<build><item objectid="${wrapperId}"/></build>` +
     `</model>`;
 
   // Bambu/Orca-flavored metadata: assign each part to its own filament slot.
+  const partsCfg = parts
+    .map(
+      (p, i) =>
+        `<part id="${i + 2}" subtype="normal_part">` +
+        `<metadata key="name" value="${p.name}"/>` +
+        `<metadata key="extruder" value="${p.extruder}"/>` +
+        `</part>`
+    )
+    .join('');
   const modelSettings =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<config>` +
-    `<object id="4">` +
+    `<object id="${wrapperId}">` +
     `<metadata key="name" value="keycap"/>` +
     `<metadata key="extruder" value="1"/>` +
-    `<part id="2" subtype="normal_part">` +
-    `<metadata key="name" value="Keycap"/>` +
-    `<metadata key="extruder" value="1"/>` +
-    `</part>` +
-    `<part id="3" subtype="normal_part">` +
-    `<metadata key="name" value="Legend"/>` +
-    `<metadata key="extruder" value="2"/>` +
-    `</part>` +
+    partsCfg +
     `</object>` +
     `</config>`;
 

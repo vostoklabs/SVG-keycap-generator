@@ -4,7 +4,7 @@ import { loadKeycap } from './keycap.js';
 import { parseSvg, logoFootprint } from './logo.js';
 import { FONT_OPTIONS, importFontFile, parseLetter } from './letter.js';
 import { buildBodies } from './geometry.js';
-import { initManifold } from './manifold.js';
+import { initManifold, geomToManifold, manifoldToGeom, creaseNormals } from './manifold.js';
 import { buildThreeMF } from './export3mf.js';
 import { LUCIDE_ICONS, buildSvg, svgDataUrl } from './lucideIcons.js';
 
@@ -49,7 +49,15 @@ const capMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.55
 const logoMat = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.5, metalness: 0.0 });
 const capMesh = new THREE.Mesh(undefined, capMat);
 const logoMesh = new THREE.Mesh(undefined, logoMat);
-group.add(capMesh, logoMesh);
+// The stem is a constant body; only its material swaps (cap colour normally, legend
+// colour in shine-through). It shares the cap/logo materials so colour edits follow.
+const stemMesh = new THREE.Mesh(undefined, capMat);
+group.add(capMesh, logoMesh, stemMesh);
+
+// Point the stem at the right shared material for the current shine-through state.
+function updateStemMaterial() {
+  stemMesh.material = $('through').checked ? logoMat : capMat;
+}
 
 function resize() {
   const w = viewport.clientWidth;
@@ -68,7 +76,8 @@ new ResizeObserver(resize).observe(viewport);
 
 // ---------------------------------------------------------------- state
 let meta = null;            // keycap metadata from convert step
-let keycapGeometry = null;  // original cap geometry (native mm)
+let shellGeometry = null;   // cap shell geometry, stem removed (native mm)
+let stemGeometry = null;    // switch stem body (constant; recoloured, never carved)
 let currentLegend = null;   // { contours, box, name }
 let lastBodies = null;      // { keycapGeometry, logoGeometry } for export
 let lastIconSelection = null;
@@ -76,10 +85,11 @@ let currentMode = 'icon';
 
 // debug handles (harmless; used for automated verification)
 window.__app = {
-  THREE, scene, camera, renderer, capMesh, logoMesh, buildThreeMF,
+  THREE, scene, camera, renderer, capMesh, logoMesh, stemMesh, buildThreeMF,
   get meta() { return meta; },
   get lastBodies() { return lastBodies; },
-  get keycapGeometry() { return keycapGeometry; },
+  get shellGeometry() { return shellGeometry; },
+  get stemGeometry() { return stemGeometry; },
 };
 
 // paired range + number input -> single value with onChange
@@ -104,6 +114,13 @@ const C = {
   offy: link('offy', 'offyNum', scheduleRegen),
 };
 $('mirror').addEventListener('change', scheduleRegen);
+$('through').addEventListener('change', () => {
+  const on = $('through').checked;
+  $('depth').disabled = on;
+  $('depthNum').disabled = on;
+  updateStemMaterial();
+  scheduleRegen();
+});
 $('capColor').addEventListener('input', () => { capMat.color.set($('capColor').value); });
 $('logoColor').addEventListener('input', () => { logoMat.color.set($('logoColor').value); });
 
@@ -116,6 +133,7 @@ function currentOpts() {
     centerY: meta.center[1] + C.offy.get(),
     rotationDeg: C.rot.get(),
     mirror: $('mirror').checked,
+    through: $('through').checked,
   };
 }
 
@@ -127,7 +145,7 @@ function scheduleRegen() {
 }
 
 async function doRegen() {
-  if (!currentLegend || !meta || !keycapGeometry) return;
+  if (!currentLegend || !meta || !shellGeometry) return;
   if (running) { scheduleRegen(); return; }
   running = true;
   busyEl.style.display = 'block';
@@ -136,12 +154,16 @@ async function doRegen() {
   try {
     const fp = logoFootprint(currentLegend.box, C.size.get());
     const { keycapGeometry: capG, logoGeometry: logoG, surfaceVariation } =
-      await buildBodies(keycapGeometry, meta, currentLegend, currentOpts());
+      await buildBodies(shellGeometry, meta, currentLegend, currentOpts());
 
+    // Preview meshes get creased normals (cosmetic); export keeps the clean indexed solids.
     capMesh.geometry?.dispose();
     logoMesh.geometry?.dispose();
-    capMesh.geometry = capG;
-    logoMesh.geometry = logoG;
+    lastBodies?.keycapGeometry?.dispose();
+    lastBodies?.logoGeometry?.dispose();
+    capMesh.geometry = creaseNormals(capG);
+    logoMesh.geometry = creaseNormals(logoG);
+    updateStemMaterial();
     lastBodies = { keycapGeometry: capG, logoGeometry: logoG };
 
     $('export').disabled = false;
@@ -150,6 +172,8 @@ async function doRegen() {
       setStatus(`Heads up: legend (${fp.w.toFixed(1)}×${fp.h.toFixed(1)} mm) is larger than the top (~${room.toFixed(1)} mm) and will be clipped.`, 'warn');
     } else if (surfaceVariation > 0.4) {
       setStatus(`Ready · legend ${fp.w.toFixed(1)}×${fp.h.toFixed(1)} mm. Note: top is curved (${surfaceVariation.toFixed(1)} mm) — keep it small so it stays flush.`, 'warn');
+    } else if ($('through').checked) {
+      setStatus(`Ready · legend ${fp.w.toFixed(1)}×${fp.h.toFixed(1)} mm · shine-through: legend + stem print in the legend filament (use transparent to light up).`);
     } else {
       setStatus(`Ready · legend ${fp.w.toFixed(1)}×${fp.h.toFixed(1)} mm · ${C.depth.get()} mm deep.`);
     }
@@ -422,10 +446,25 @@ $('upload').addEventListener('change', async (e) => {
 // ---------------------------------------------------------------- export
 $('export').addEventListener('click', () => {
   if (!lastBodies) return;
-  const blob = buildThreeMF(lastBodies.keycapGeometry, lastBodies.logoGeometry, {
-    keycapColor: $('capColor').value,
-    logoColor: $('logoColor').value,
-  });
+  const capColor = $('capColor').value;
+  const logoColor = $('logoColor').value;
+  const through = $('through').checked;
+
+  const parts = [
+    { name: 'Keycap', color: capColor, extruder: 1, geom: lastBodies.keycapGeometry },
+    { name: 'Legend', color: logoColor, extruder: 2, geom: lastBodies.logoGeometry },
+  ];
+  // Stem rides on the legend filament in shine-through, otherwise the keycap filament.
+  if (stemGeometry) {
+    parts.push({
+      name: 'Stem',
+      color: through ? logoColor : capColor,
+      extruder: through ? 2 : 1,
+      geom: stemGeometry,
+    });
+  }
+
+  const blob = buildThreeMF(parts);
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `keycap-${(currentLegend?.name || 'legend').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.3mf`;
@@ -437,11 +476,22 @@ $('export').addEventListener('click', () => {
 // ---------------------------------------------------------------- boot
 (async function boot() {
   try {
-    initManifold(); // warm up the WASM engine in the background
+    await initManifold(); // engine needed up-front to clean the stem body
     const kc = await loadKeycap();
-    keycapGeometry = kc.geometry;
+    shellGeometry = kc.shellGeometry;
     meta = kc.meta;
-    capMesh.geometry = keycapGeometry.clone();
+    capMesh.geometry = shellGeometry.clone();
+
+    // Run the stem through Manifold once so it's a watertight, welded, manifold solid
+    // (the raw STEP tessellation has split vertices) — clean for both preview and 3MF.
+    if (kc.stemGeometry) {
+      const m = geomToManifold(kc.stemGeometry);
+      stemGeometry = manifoldToGeom(m); // clean indexed solid kept for export
+      m.delete();
+      kc.stemGeometry.dispose();
+      stemMesh.geometry = creaseNormals(stemGeometry); // creased copy for preview
+    }
+    updateStemMaterial();
 
     // frame the camera on the cap (native -> display: (x,y,z) -> (x, z, -y))
     const target = new THREE.Vector3(meta.center[0], meta.topZ / 2, -meta.center[1]);

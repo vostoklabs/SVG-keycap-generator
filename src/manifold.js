@@ -28,6 +28,8 @@ export function geomToManifold(geom) {
 }
 
 // Manifold solid -> three geometry. Copies out of WASM memory so it survives delete().
+// Returns the clean, indexed, 2-manifold mesh exactly as Manifold produced it — this is
+// what the 3MF export must use. (For preview shading, run it through creaseNormals.)
 export function manifoldToGeom(man) {
   const m = man.getMesh();
   const np = m.numProp;
@@ -42,11 +44,15 @@ export function manifoldToGeom(man) {
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setIndex(new THREE.BufferAttribute(new Uint32Array(m.triVerts), 1));
   g.computeVertexNormals();
+  return g;
+}
 
-  // Split vertex normals at sharp corners (>30°) while keeping curved surfaces smooth.
-  const creasedGeom = toCreasedNormals(g, 30 * Math.PI / 180);
-  g.dispose();
-  return creasedGeom;
+// Split vertex normals at sharp corners (>creaseAngle) while keeping curved surfaces
+// smooth — for nicer PREVIEW shading only. Produces a non-indexed clone; never feed it to
+// the 3MF export, since re-welding thin features (e.g. the stem cross) can fuse vertices
+// and introduce non-manifold edges. Export manifoldToGeom()'s indexed output instead.
+export function creaseNormals(geom, creaseAngleDeg = 30) {
+  return toCreasedNormals(geom, (creaseAngleDeg * Math.PI) / 180);
 }
 
 // 2D contours -> vertical prism spanning bottomZ .. bottomZ + height.
