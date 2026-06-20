@@ -211,6 +211,13 @@
 
       /* Support section */
       .support-text { font-size: 12.5px; color: var(--text); line-height: 1.45; margin-bottom: 10px; }
+      .support-free {
+        font-size: 12.5px; color: var(--muted); line-height: 1.5;
+        margin-bottom: 12px; padding-bottom: 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .support-free a { color: var(--accent); text-decoration: none; }
+      .support-free a:hover { text-decoration: underline; }
       .kofi-btn {
         display: flex; align-items: center; justify-content: center; gap: 8px;
         width: 100%; padding: 10px; border-radius: 9px;
@@ -219,6 +226,16 @@
       }
       .kofi-btn:hover { filter: brightness(1.07); }
       .kofi-btn svg { width: 16px; height: 16px; flex: 0 0 16px; }
+      /* Footer credits */
+      .footer-credits {
+        padding: 10px 0 0;
+        font-size: 11px; color: var(--muted);
+        text-align: center; border-top: 1px solid var(--line);
+        margin-top: auto;
+      }
+      .footer-credits a { color: var(--muted); text-decoration: none; }
+      .footer-credits a:hover { color: var(--text); text-decoration: underline; }
+      .footer-credits .sep { margin: 0 6px; opacity: .45; }
 
       button.primary {
         width: 100%; padding: 11px; border: none; border-radius: 9px; cursor: pointer;
@@ -368,7 +385,8 @@
       </div>
 
       <div class="section">
-        <div class="support-text">If you want to support the creator, you can buy me a Ko-fi ☕</div>
+        <p class="support-free">You can support me for free by <a href="https://makerworld.com/en/@Vostok_Labs" target="_blank" rel="noopener">downloading the model on MakerWorld</a>, giving it a <a href="https://makerworld.com/en/@Vostok_Labs" target="_blank" rel="noopener">like and a boost</a>, and <a href="https://makerworld.com/en/@Vostok_Labs" target="_blank" rel="noopener">following my page on MakerWorld</a>.</p>
+        <div class="support-text">Or buy me a Ko-fi ☕</div>
         <a class="kofi-btn" href="https://ko-fi.com/vostoklabs" target="_blank" rel="noopener">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
@@ -379,6 +397,12 @@
           </svg>
           Buy me a Ko-fi
         </a>
+      </div>
+
+      <div class="footer-credits">
+        Made by <a href="https://makerworld.com/en/@Vostok_Labs" target="_blank" rel="noopener">Vostok Labs</a>
+        <span class="sep">·</span>
+        <a href="https://github.com/vostoklabs/svg-keycap-generator/blob/main/LICENSE.md" target="_blank" rel="noopener">License</a>
       </div>
     </aside>
 
