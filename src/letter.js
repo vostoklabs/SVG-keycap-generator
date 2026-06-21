@@ -36,6 +36,49 @@ for (const [id, name, data] of BUILT_IN_FONTS) {
   FONT_OPTIONS.push({ id, name, font: fontLoader.parse(data) });
 }
 
+// Open-source TTFs bundled in public/fonts/ (SIL OFL 1.1 — see public/fonts/CREDITS.md).
+// Loaded lazily at startup via loadBundledFonts() so the dropdown grows as each parses;
+// a font that fails is skipped rather than blocking the rest. Ordered keycap-friendly first.
+const BUNDLED_TTF = [
+  ['bebas-neue', 'Bebas Neue'],
+  ['anton', 'Anton'],
+  ['oswald', 'Oswald'],
+  ['titillium-web', 'Titillium Web'],
+  ['rajdhani', 'Rajdhani'],
+  ['chakra-petch', 'Chakra Petch'],
+  ['orbitron', 'Orbitron'],
+  ['audiowide', 'Audiowide'],
+  ['michroma', 'Michroma'],
+  ['russo-one', 'Russo One'],
+  ['righteous', 'Righteous'],
+  ['bungee', 'Bungee'],
+  ['share-tech-mono', 'Share Tech Mono'],
+  ['vt323', 'VT323'],
+  ['press-start-2p', 'Press Start 2P'],
+  ['arvo', 'Arvo'],
+  ['lobster', 'Lobster'],
+  ['pacifico', 'Pacifico'],
+];
+
+let bundledLoaded = false;
+export async function loadBundledFonts(onLoaded) {
+  if (bundledLoaded) return;
+  bundledLoaded = true;
+  for (const [slug, name] of BUNDLED_TTF) {
+    try {
+      const buf = await fetch(`fonts/${slug}.ttf`).then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.arrayBuffer();
+      });
+      const option = { id: `bundled-${slug}`, name, font: fontLoader.parse(ttfLoader.parse(buf)) };
+      FONT_OPTIONS.push(option);
+      onLoaded?.(option);
+    } catch (e) {
+      console.warn(`Could not load font "${name}":`, e.message);
+    }
+  }
+}
+
 function uniqueFontId(base) {
   const slug = base
     .replace(/\.[^.]+$/g, '')

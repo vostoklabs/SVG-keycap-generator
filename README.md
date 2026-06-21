@@ -1,71 +1,77 @@
 # Keycap Legend Generator
 
-Local web app to drop an SVG icon or typed letter onto a keycap and export a
-**two-color 3MF** (keycap body + legend body) for printing the cap face-down in
-two filaments.
+Design a custom keyboard keycap in your browser — drop on an icon, a brand logo, or a
+letter — and export a ready-to-print **two-color 3MF**: the keycap in one filament, the
+legend in another. No CAD, no sign-up, nothing to install.
+
+### ▶ [Open the generator](https://vostoklabs.github.io/SVG-keycap-generator/)
 
 ![Keycap Legend Generator — web UI](docs/main-screen.png)
 
-Printed results (use the [MakerWorld print profile](https://makerworld.com/en/@Vostok_Labs)
-for best quality):
+Printed results (grab the [MakerWorld print profile](https://makerworld.com/en/@Vostok_Labs)
+for the best finish):
 
 | All sizes | Icons & SVG logos | Shine-through |
 | --- | --- | --- |
 | ![Every keycap size printed](docs/all-sizes.jpg) | ![Icon and SVG legends](docs/icons-and-svg.jpg) | ![Shine-through legend lit up](docs/shine-through.jpg) |
 
-## Run
+## What you can do
+
+- **Pick a size** — 1u, 1.25u, 1.5u, 1.75u, 2u, 2.25u, 2.75u and 6u / 6.25u / 6.5u
+  spacebars, each with the correct Cherry MX-style switch stems.
+- **Choose a legend** — search thousands of [Lucide](https://lucide.dev) icons, **upload
+  your own SVG** (brand logos from [Simple Icons](https://simpleicons.org) work great), or
+  **type** a letter, number, symbol or short word in any of ~30 built-in fonts (or import
+  your own `.ttf` / `.otf`).
+- **Place it exactly** — size, depth, rotation, nudge and mirror, with a live 3D preview.
+- **Two colors** — set the cap and legend colors; the preview matches the exported file.
+- **Shine-through mode** — carves the legend clear through the top so it lights up when you
+  print the legend (and stem) in transparent filament.
+- **Clean export** — a two-color 3MF that opens as a single object with two pre-colored
+  parts, ready to slice.
+
+## How to print
+
+1. [Open the generator](https://vostoklabs.github.io/SVG-keycap-generator/), design your
+   keycap, and click **Export 3MF**.
+2. Open the file in your slicer (PrusaSlicer / OrcaSlicer / Bambu Studio). It loads as one
+   object with two parts — *Keycap* and *Legend* — already colored; assign a filament to each.
+3. Orient the cap **top-face-down** so the legend prints as the first layers.
+4. For the best quality, use the print profile and instructions on
+   [MakerWorld](https://makerworld.com/en/@Vostok_Labs).
+
+## Support
+
+If this saved you a few bucks, you can support it **for free** — download the model on
+MakerWorld, give it a like and a boost, and follow the page. Or
+[buy me a Ko-fi ☕](https://ko-fi.com/vostoklabs).
+
+## Run it locally
 
 ```bash
 npm install
-npm run dev       # opens the app
+npm run dev
 ```
 
-The converted keycaps (`public/keycaps/*.json`) are committed, so a fresh clone runs
-without a build step. You only need `npm run convert` if you change the source CAD — see
-[Add or swap keycap sizes](#add-or-swap-keycap-sizes).
+Built with [Vite](https://vitejs.dev), [three.js](https://threejs.org) and
+[manifold-3d](https://github.com/elalish/manifold) (the geometry booleans that carve the
+legend into the cap). The keycap meshes ship pre-converted in `public/keycaps/`, so it runs
+straight after install.
 
-## Use
+<details>
+<summary>Regenerating the keycap meshes (advanced)</summary>
 
-1. Choose the **Keycap size** (1u … spacebars) from the dropdown in the left panel.
-2. Pick an icon from the gallery (or **Upload SVG**) or switch to **Letter** and choose a font.
-3. Set **Size**, **Depth** (default 0.5 mm), rotation and nudge. The legend is centered on the dish.
-4. Choose the two colors (used in the preview and written into the 3MF).
-5. **Export 3MF** → open in PrusaSlicer / OrcaSlicer / Bambu Studio.
+The cap meshes are tessellated from STEP files with `npm run convert`. The source CAD is
+**not** tracked in the repo — only the generated `public/keycaps/*.json` are. To add or
+change a size, drop `.stp` / `.step` files into `Step files of keycaps/` and re-run the
+script; the unit and variant are read from the file name (e.g. `6,5 u spacebar.stp` →
+"6.5u Spacebar"). Each STEP should hold the cap shell plus its switch stem(s) as separate
+solids.
+</details>
 
-In the slicer the file loads as one object with two parts (*Keycap* + *Legend*),
-already colored. Assign a filament to each, then orient the cap **top-face-down**
-to print the legend color as the first layers.
+## License & credits
 
-## How it works
-
-- `scripts/convert-keycap.mjs` tessellates every STEP file in `Step files of keycaps/`
-  (via `occt-import-js`) into one `public/keycaps/<id>.json` each — shell + stem(s) plus
-  metadata (bounding box, top Z, dish bottom) — and a `public/keycaps/index.json` manifest
-  that fills the size dropdown. The default unit is also written to `public/keycap.json`.
-- The chosen SVG icon or generated letter outline is extruded into a tall prism over
-  the legend footprint. Two booleans (`three-bvh-csg`) split the cap:
-  `cap ∩ prism` → the legend body (its top **is** the real
-  dished surface, ≥ depth thick), `cap − prism` → a perfectly matching pocket.
-- `src/export3mf.js` zips both meshes into a 3MF with two base materials.
-
-## Add more icons
-
-Drop `*.svg` files into `public/icons/` — they appear in the gallery on refresh.
-Single-color outline icons (e.g. [Simple Icons](https://simpleicons.org)) work best.
-
-## Add more fonts
-
-Use **Import font** in Letter mode to load a local `.ttf`, `.otf`, or Three.js
-`.typeface.json` font. Imported fonts are available for the current browser session.
-
-## Add or swap keycap sizes
-
-The source `.stp` CAD files are **not** tracked in the repo (they're large and redundant
-once converted) — only the generated `public/keycaps/*.json` are committed. To add or
-change a size, drop `.stp`/`.step` files into `Step files of keycaps/` (git-ignored) and
-re-run `npm run convert`, then commit the updated JSON.
-
-Each file becomes a size in the dropdown. The unit and variant are read from the file
-name: `1,25 u.stp` → "1.25u", `2 u, 3 stems.stp` → "2u (3 stems)", `6,5 u spacebar.stp`
-→ "6.5u Spacebar" (use a comma for the decimal). Each STEP should hold the cap shell plus
-its switch stem(s) as separate solids.
+- Code & models: [CC BY-NC-ND 4.0](LICENSE.md) — personal, non-commercial use.
+- Letter fonts: [Google Fonts](https://fonts.google.com), SIL Open Font License 1.1 — see
+  [`public/fonts/CREDITS.md`](public/fonts/CREDITS.md).
+- Icons: [Lucide](https://lucide.dev) (ISC).

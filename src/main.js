@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { loadKeycap } from './keycap.js';
 import { parseSvg, logoFootprint } from './logo.js';
-import { FONT_OPTIONS, importFontFile, parseLetter } from './letter.js';
+import { FONT_OPTIONS, importFontFile, parseLetter, loadBundledFonts } from './letter.js';
 import { buildBodies } from './geometry.js';
 import { initManifold, geomToManifold, manifoldToGeom, creaseNormals } from './manifold.js';
 import { buildThreeMF } from './export3mf.js';
@@ -373,6 +373,7 @@ function addFontOption(font) {
 }
 
 for (const font of FONT_OPTIONS) addFontOption(font);
+loadBundledFonts(addFontOption); // append the bundled open-source fonts as they parse
 
 $('iconMode').addEventListener('click', () => setLegendMode('icon'));
 $('uploadMode').addEventListener('click', () => setLegendMode('upload'));
