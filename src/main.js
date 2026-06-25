@@ -106,6 +106,7 @@ const stemMesh = new THREE.Mesh(undefined, capMat);
 group.add(capMesh, logoMesh, stemMesh);
 
 // Point the stem at the right shared material for the current shine-through state.
+// (Single-colour mode prints everything in the cap filament, so the stem stays capMat.)
 function updateStemMaterial() {
   stemMesh.material = $('through').checked ? logoMat : capMat;
 }
@@ -176,7 +177,16 @@ const C = {
   offy: link('offy', 'offyNum', scheduleRegen),
 };
 $('mirror').addEventListener('change', scheduleRegen);
-$('through').addEventListener('change', () => { applyThroughState(); scheduleRegen(); });
+// Shine-through and single-colour are mutually exclusive: one prints the legend in a second
+// (transparent) filament, the other engraves it in the single cap filament.
+$('through').addEventListener('change', () => {
+  if ($('through').checked) $('single').checked = false;
+  applyModeFlags(); scheduleRegen();
+});
+$('single').addEventListener('change', () => {
+  if ($('single').checked) $('through').checked = false;
+  applyModeFlags(); scheduleRegen();
+});
 $('capColor').addEventListener('input', () => { capMat.color.set($('capColor').value); });
 $('logoColor').addEventListener('input', () => { logoMat.color.set($('logoColor').value); });
 
@@ -185,15 +195,17 @@ $('logoColor').addEventListener('input', () => { logoMat.color.set($('logoColor'
 // once we know the sensible default for this cap's geometry.
 const DEFAULTS = {
   size: 8, depth: 0.5, rot: 0, offx: 0, offy: 0,
-  mirror: false, through: false,
+  mirror: false, through: false, single: false,
   capColor: '#1c1c1e', logoColor: '#f2f2f2',
 };
 
+// Reflect the current shine-through / single-colour state on dependent inputs.
 // Shine-through prints the legend through the wall, so depth no longer applies.
-function applyThroughState() {
-  const on = $('through').checked;
-  $('depth').disabled = on;
-  $('depthNum').disabled = on;
+// Single-colour engraves the legend in the cap filament, so the legend colour is moot.
+function applyModeFlags() {
+  $('depth').disabled = $('through').checked;
+  $('depthNum').disabled = $('through').checked;
+  $('logoColor').disabled = $('single').checked;
   updateStemMaterial();
 }
 
@@ -205,7 +217,8 @@ function resetPlacement() {
   C.offy.set(DEFAULTS.offy);
   $('mirror').checked = DEFAULTS.mirror;
   $('through').checked = DEFAULTS.through;
-  applyThroughState();
+  $('single').checked = DEFAULTS.single;
+  applyModeFlags();
   scheduleRegen();
 }
 
@@ -238,6 +251,7 @@ function currentOpts() {
     rotationDeg: C.rot.get(),
     mirror: $('mirror').checked,
     through: $('through').checked,
+    singleColor: $('single').checked,
   };
 }
 
@@ -266,7 +280,15 @@ async function doRegen() {
     lastBodies?.keycapGeometry?.dispose();
     lastBodies?.logoGeometry?.dispose();
     capMesh.geometry = creaseNormals(capG);
-    logoMesh.geometry = creaseNormals(logoG);
+    // Single-colour mode returns no legend body — hide the legend mesh; the icon is now a
+    // recess carved into the cap geometry itself.
+    if (logoG) {
+      logoMesh.geometry = creaseNormals(logoG);
+      logoMesh.visible = true;
+    } else {
+      logoMesh.geometry = undefined;
+      logoMesh.visible = false;
+    }
     updateStemMaterial();
     lastBodies = { keycapGeometry: capG, logoGeometry: logoG };
 
@@ -278,6 +300,8 @@ async function doRegen() {
       setStatus(`Ready · legend ${fp.w.toFixed(1)}×${fp.h.toFixed(1)} mm. Note: top is curved (${surfaceVariation.toFixed(1)} mm) — keep it small so it stays flush.`, 'warn');
     } else if ($('through').checked) {
       setStatus(`Ready · legend ${fp.w.toFixed(1)}×${fp.h.toFixed(1)} mm · shine-through: legend + stem print in the legend filament (use transparent to light up).`);
+    } else if ($('single').checked) {
+      setStatus(`Ready · legend ${fp.w.toFixed(1)}×${fp.h.toFixed(1)} mm · single colour: legend engraved ${C.depth.get()} mm deep — prints in one filament.`);
     } else {
       setStatus(`Ready · legend ${fp.w.toFixed(1)}×${fp.h.toFixed(1)} mm · ${C.depth.get()} mm deep.`);
     }
@@ -574,8 +598,11 @@ $('upload').addEventListener('change', async (e) => {
 function buildExportParts(bodies, capColor, logoColor, through) {
   const parts = [
     { name: 'Keycap', color: capColor, extruder: 1, geom: bodies.keycapGeometry },
-    { name: 'Legend', color: logoColor, extruder: 2, geom: bodies.logoGeometry },
   ];
+  // Single-colour mode has no separate legend body (it's a recess in the cap).
+  if (bodies.logoGeometry) {
+    parts.push({ name: 'Legend', color: logoColor, extruder: 2, geom: bodies.logoGeometry });
+  }
   if (stemGeometry) {
     parts.push({
       name: 'Stem',
@@ -598,7 +625,9 @@ $('export').addEventListener('click', () => {
   a.download = `keycap-${(currentLegend?.name || 'legend').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.3mf`;
   a.click();
   URL.revokeObjectURL(a.href);
-  setStatus('Exported 3MF ✓  Open in your slicer and assign two filaments.');
+  setStatus($('single').checked
+    ? 'Exported 3MF ✓  Single-colour cap with an engraved legend — one filament.'
+    : 'Exported 3MF ✓  Open in your slicer and assign two filaments.');
 });
 
 // Export the bare cap (uncarved shell + stem) in a single colour — no legend.
@@ -666,7 +695,7 @@ async function generateAlphabetSet() {
       const parts = buildExportParts(bodies, capColor, logoColor, through);
       files[`keycap-${ch}.3mf`] = new Uint8Array(await buildThreeMF(parts).arrayBuffer());
       bodies.keycapGeometry.dispose();
-      bodies.logoGeometry.dispose();
+      bodies.logoGeometry?.dispose();
     }
 
     // 3MFs are already deflated zips — store (level 0) rather than re-compress.

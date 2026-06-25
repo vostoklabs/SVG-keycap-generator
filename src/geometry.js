@@ -133,12 +133,14 @@ export async function buildBodies(capGeom, meta, icon, opts) {
 
   if (!prism) throw new Error('No geometry to extrude for this icon.');
 
-  const logoM  = cap.intersect(prism);
+  // Single-colour mode: only carve the recess (cap − prism) and skip the separate legend
+  // body, so the whole cap prints in one filament with the icon engraved into the top.
+  const logoM  = opts.singleColor ? null : cap.intersect(prism);
   const bodyM  = cap.subtract(prism);
 
-  const logoGeometry    = manifoldToGeom(logoM);
+  const logoGeometry    = logoM ? manifoldToGeom(logoM) : null;
   const keycapGeometry  = manifoldToGeom(bodyM);
 
-  cap.delete(); prism.delete(); logoM.delete(); bodyM.delete();
+  cap.delete(); prism.delete(); logoM?.delete(); bodyM.delete();
   return { keycapGeometry, logoGeometry, surfaceVariation: hi - lo };
 }
