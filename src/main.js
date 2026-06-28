@@ -627,7 +627,8 @@ $('export').addEventListener('click', () => {
   const blob = buildThreeMF(parts);
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `keycap-${(currentLegend?.name || 'legend').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.3mf`;
+  const legendSlug = (currentLegend?.name || 'legend').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  a.download = `keycap-${legendSlug}${profileSlug() ? '-' + profileSlug() : ''}.3mf`;
   a.click();
   URL.revokeObjectURL(a.href);
   setStatus($('single').checked
@@ -647,7 +648,8 @@ $('exportBlank').addEventListener('click', () => {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   const sizeLabel = ($('unitSelect').value || '').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
-  a.download = `keycap-blank${sizeLabel ? '-' + sizeLabel : ''}.3mf`;
+  const tags = [profileSlug(), sizeLabel].filter(Boolean).join('-');
+  a.download = `keycap-blank${tags ? '-' + tags : ''}.3mf`;
   a.click();
   URL.revokeObjectURL(a.href);
   setStatus('Exported blank keycap ✓  Single-colour cap with no legend.');
@@ -708,7 +710,7 @@ async function generateAlphabetSet() {
     const fontSlug = fontName.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([zipped], { type: 'application/zip' }));
-    a.download = `keycap-alphabet-${fontSlug}.zip`;
+    a.download = `keycap-alphabet-${fontSlug}${profileSlug() ? '-' + profileSlug() : ''}.zip`;
     a.click();
     URL.revokeObjectURL(a.href);
     setStatus('Exported full alphabet set ✓  26 keycaps (A–Z) zipped — open each 3MF in your slicer.');
@@ -810,13 +812,17 @@ function setKeycap(kc) {
   $('meta').textContent = `Cap ${(meta.bbox.max[0] - meta.bbox.min[0]).toFixed(1)}×${(meta.bbox.max[1] - meta.bbox.min[1]).toFixed(1)}×${meta.topZ.toFixed(1)} mm · ${meta.triangles} tris · from ${meta.generatedFrom}`;
 }
 
+const profileSelect = $('profileSelect');
 const unitSelect = $('unitSelect');
-let keycapManifest = [];
+let keycapProfiles = [];     // [{ id, label, default, keycaps:[{ id, label, file, unit }] }]
+let currentProfile = null;   // the active profile object
+let keycapManifest = [];     // the active profile's size list (keycaps[])
 
-// Load a different keycap size and rebuild the current legend on it.
+// Load a different keycap (profile/size) and rebuild the current legend on it.
 async function switchKeycap(file, label) {
   busyEl.style.display = 'block';
   unitSelect.disabled = true;
+  profileSelect.disabled = true;
   try {
     const kc = await loadKeycap(file);
     setKeycap(kc);
@@ -824,11 +830,48 @@ async function switchKeycap(file, label) {
   } catch (e) {
     console.error(e);
     busyEl.style.display = 'none';
-    setStatus(`Could not load ${label || 'this size'}.`, 'err');
+    setStatus(`Could not load ${label || 'this keycap'}.`, 'err');
   } finally {
     unitSelect.disabled = false;
+    profileSelect.disabled = false;
   }
 }
+
+// Fill the size dropdown from a profile, keeping the same size id when it exists (so flipping
+// profile preserves the chosen size — both profiles carry the same set). Returns the entry.
+function populateSizes(profile, preferredId) {
+  keycapManifest = profile.keycaps;
+  unitSelect.textContent = '';
+  for (const k of keycapManifest) {
+    const opt = document.createElement('option');
+    opt.value = k.id;
+    opt.textContent = k.label;
+    unitSelect.appendChild(opt);
+  }
+  const entry =
+    keycapManifest.find((k) => k.id === preferredId) ||
+    keycapManifest.find((k) => k.id === profile.default) ||
+    keycapManifest[0];
+  unitSelect.value = entry.id;
+  return entry;
+}
+
+// Slug for the active profile, used to keep exported filenames distinct between profiles.
+// Empty when there's only one profile, so single-profile filenames stay unchanged.
+function profileSlug() {
+  if (!currentProfile || keycapProfiles.length < 2) return '';
+  return currentProfile.id.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+}
+
+profileSelect.addEventListener('change', () => {
+  const profile = keycapProfiles.find((p) => p.id === profileSelect.value);
+  if (!profile) return;
+  currentProfile = profile;
+  const entry = populateSizes(profile, unitSelect.value); // keep the current size if it exists
+  currentUnit = entry.unit || 1;
+  updateAlphabetAvailability();
+  switchKeycap(entry.file, `${profile.label} ${entry.label}`);
+});
 
 unitSelect.addEventListener('change', () => {
   const entry = keycapManifest.find((k) => k.id === unitSelect.value);
@@ -839,31 +882,70 @@ unitSelect.addEventListener('change', () => {
   }
 });
 
+// ------------------------------------------------------- "what's new" modal
+// Shows on every visit until the user ticks "Don't show this again". Bump
+// WHATS_NEW_VERSION whenever the notes change so the popup resurfaces for everyone.
+(function whatsNew() {
+  const WHATS_NEW_VERSION = '2026-06-low-profile';
+  const KEY = 'keycap_whatsnew_dismissed';
+  const overlay = $('whatsNew');
+  if (!overlay) return;
+
+  let dismissed = null;
+  try { dismissed = localStorage.getItem(KEY); } catch {}
+  if (dismissed === WHATS_NEW_VERSION) return; // user opted out of this version
+
+  const close = () => {
+    overlay.hidden = true;
+    document.removeEventListener('keydown', onKey);
+    if ($('whatsNewHide').checked) {
+      try { localStorage.setItem(KEY, WHATS_NEW_VERSION); } catch {}
+    }
+  };
+  function onKey(e) { if (e.key === 'Escape') close(); }
+
+  $('whatsNewClose').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); }); // backdrop
+  document.addEventListener('keydown', onKey);
+  overlay.hidden = false;
+})();
+
 // ---------------------------------------------------------------- boot
 (async function boot() {
   try {
     await initManifold(); // engine needed up-front to clean the stem body
 
-    // Pull the size manifest; fall back to the single-cap file if it isn't there.
+    // Pull the manifest; fall back to the single-cap file if it isn't there.
     const index = await fetch('keycaps/index.json')
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null);
 
+    // Accept the profile-aware manifest, or the older flat { default, keycaps } as one profile.
+    const profiles = index?.profiles?.length
+      ? index.profiles
+      : index?.keycaps?.length
+        ? [{ id: 'default', label: 'Default', default: index.default, keycaps: index.keycaps }]
+        : null;
+
     let defaultFile = 'keycap.json';
-    if (index?.keycaps?.length) {
-      keycapManifest = index.keycaps;
-      for (const k of keycapManifest) {
+    if (profiles) {
+      keycapProfiles = profiles;
+      for (const p of profiles) {
         const opt = document.createElement('option');
-        opt.value = k.id;
-        opt.textContent = k.label;
-        unitSelect.appendChild(opt);
+        opt.value = p.id;
+        opt.textContent = p.label;
+        profileSelect.appendChild(opt);
       }
-      const def = keycapManifest.find((k) => k.id === index.default) || keycapManifest[0];
-      unitSelect.value = def.id;
-      defaultFile = def.file;
-      currentUnit = def.unit || 1;
+      const defProfile = profiles.find((p) => p.id === index.defaultProfile) || profiles[0];
+      currentProfile = defProfile;
+      profileSelect.value = defProfile.id;
+      const entry = populateSizes(defProfile, defProfile.default);
+      defaultFile = entry.file;
+      currentUnit = entry.unit || 1;
+      // A single profile needs no picker — keep the size dropdown, hide the profile one.
+      if (profiles.length < 2) profileSelect.closest('.field').style.display = 'none';
     } else {
-      unitSelect.closest('.section').style.display = 'none'; // no sizes — hide the picker
+      unitSelect.closest('.section').style.display = 'none'; // no manifest — hide the picker
     }
 
     try {

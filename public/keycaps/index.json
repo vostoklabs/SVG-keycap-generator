@@ -1,71 +1,151 @@
 {
-  "default": "1u",
-  "keycaps": [
+  "defaultProfile": "standard-profile",
+  "profiles": [
     {
-      "id": "1u",
-      "label": "1u",
-      "file": "keycaps/1u.json",
-      "unit": 1
+      "id": "standard-profile",
+      "label": "Standard profile",
+      "default": "1u",
+      "keycaps": [
+        {
+          "id": "1u",
+          "label": "1u",
+          "file": "keycaps/standard-profile/1u.json",
+          "unit": 1
+        },
+        {
+          "id": "1_25u",
+          "label": "1.25u",
+          "file": "keycaps/standard-profile/1_25u.json",
+          "unit": 1.25
+        },
+        {
+          "id": "1_5u",
+          "label": "1.5u",
+          "file": "keycaps/standard-profile/1_5u.json",
+          "unit": 1.5
+        },
+        {
+          "id": "1_75u",
+          "label": "1.75u",
+          "file": "keycaps/standard-profile/1_75u.json",
+          "unit": 1.75
+        },
+        {
+          "id": "2u-1stem",
+          "label": "2u (1 stem)",
+          "file": "keycaps/standard-profile/2u-1stem.json",
+          "unit": 2
+        },
+        {
+          "id": "2u-3stem",
+          "label": "2u (3 stems)",
+          "file": "keycaps/standard-profile/2u-3stem.json",
+          "unit": 2
+        },
+        {
+          "id": "2_25u",
+          "label": "2.25u",
+          "file": "keycaps/standard-profile/2_25u.json",
+          "unit": 2.25
+        },
+        {
+          "id": "2_75u",
+          "label": "2.75u",
+          "file": "keycaps/standard-profile/2_75u.json",
+          "unit": 2.75
+        },
+        {
+          "id": "6u-spacebar",
+          "label": "6u Spacebar",
+          "file": "keycaps/standard-profile/6u-spacebar.json",
+          "unit": 6
+        },
+        {
+          "id": "6_25u-spacebar",
+          "label": "6.25u Spacebar",
+          "file": "keycaps/standard-profile/6_25u-spacebar.json",
+          "unit": 6.25
+        },
+        {
+          "id": "6_5u-spacebar",
+          "label": "6.5u Spacebar",
+          "file": "keycaps/standard-profile/6_5u-spacebar.json",
+          "unit": 6.5
+        }
+      ]
     },
     {
-      "id": "1_25u",
-      "label": "1.25u",
-      "file": "keycaps/1_25u.json",
-      "unit": 1.25
-    },
-    {
-      "id": "1_5u",
-      "label": "1.5u",
-      "file": "keycaps/1_5u.json",
-      "unit": 1.5
-    },
-    {
-      "id": "1_75u",
-      "label": "1.75u",
-      "file": "keycaps/1_75u.json",
-      "unit": 1.75
-    },
-    {
-      "id": "2u-1stem",
-      "label": "2u (1 stem)",
-      "file": "keycaps/2u-1stem.json",
-      "unit": 2
-    },
-    {
-      "id": "2u-3stem",
-      "label": "2u (3 stems)",
-      "file": "keycaps/2u-3stem.json",
-      "unit": 2
-    },
-    {
-      "id": "2_25u",
-      "label": "2.25u",
-      "file": "keycaps/2_25u.json",
-      "unit": 2.25
-    },
-    {
-      "id": "2_75u",
-      "label": "2.75u",
-      "file": "keycaps/2_75u.json",
-      "unit": 2.75
-    },
-    {
-      "id": "6u-spacebar",
-      "label": "6u Spacebar",
-      "file": "keycaps/6u-spacebar.json",
-      "unit": 6
-    },
-    {
-      "id": "6_25u-spacebar",
-      "label": "6.25u Spacebar",
-      "file": "keycaps/6_25u-spacebar.json",
-      "unit": 6.25
-    },
-    {
-      "id": "6_5u-spacebar",
-      "label": "6.5u Spacebar",
-      "file": "keycaps/6_5u-spacebar.json",
-      "unit": 6.5
+      "id": "low-profile",
+      "label": "Low profile",
+      "default": "1u",
+      "keycaps": [
+        {
+          "id": "1u",
+          "label": "1u",
+          "file": "keycaps/low-profile/1u.json",
+          "unit": 1
+        },
+        {
+          "id": "1_25u",
+          "label": "1.25u",
+          "file": "keycaps/low-profile/1_25u.json",
+          "unit": 1.25
+        },
+        {
+          "id": "1_5u",
+          "label": "1.5u",
+          "file": "keycaps/low-profile/1_5u.json",
+          "unit": 1.5
+        },
+        {
+          "id": "1_75u",
+          "label": "1.75u",
+          "file": "keycaps/low-profile/1_75u.json",
+          "unit": 1.75
+        },
+        {
+          "id": "2u-1stem",
+          "label": "2u (1 stem)",
+          "file": "keycaps/low-profile/2u-1stem.json",
+          "unit": 2
+        },
+        {
+          "id": "2u-3stem",
+          "label": "2u (3 stems)",
+          "file": "keycaps/low-profile/2u-3stem.json",
+          "unit": 2
+        },
+        {
+          "id": "2_25u",
+          "label": "2.25u",
+          "file": "keycaps/low-profile/2_25u.json",
+          "unit": 2.25
+        },
+        {
+          "id": "2_75u",
+          "label": "2.75u",
+          "file": "keycaps/low-profile/2_75u.json",
+          "unit": 2.75
+        },
+        {
+          "id": "6u-spacebar",
+          "label": "6u Spacebar",
+          "file": "keycaps/low-profile/6u-spacebar.json",
+          "unit": 6
+        },
+        {
+          "id": "6_25u-spacebar",
+          "label": "6.25u Spacebar",
+          "file": "keycaps/low-profile/6_25u-spacebar.json",
+          "unit": 6.25
+        },
+        {
+          "id": "6_5u-spacebar",
+          "label": "6.5u Spacebar",
+          "file": "keycaps/low-profile/6_5u-spacebar.json",
+          "unit": 6.5
+        }
+      ]
     }
   ]
 }

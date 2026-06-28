@@ -261,6 +261,42 @@
       .meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
       code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
 
+      /* "What's new" modal — centered overlay shown on load until dismissed */
+      .modal-overlay {
+        position: fixed; inset: 0; z-index: 100;
+        background: rgba(0, 0, 0, .6); backdrop-filter: blur(2px);
+        display: flex; align-items: center; justify-content: center; padding: 20px;
+        animation: modalFade .16s ease;
+      }
+      .modal-overlay[hidden] { display: none; }
+      @keyframes modalFade { from { opacity: 0; } to { opacity: 1; } }
+      .modal {
+        background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+        padding: 22px 22px 18px; width: 100%; max-width: 450px;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, .55);
+      }
+      .modal h2 { margin: 0 0 3px; font-size: 18px; letter-spacing: .2px; }
+      .modal .modal-sub { color: var(--muted); font-size: 12.5px; margin: 0 0 16px; }
+      .whatsnew-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 13px; }
+      .whatsnew-list li { display: flex; gap: 11px; align-items: flex-start; }
+      .whatsnew-list .wn-ico {
+        flex: 0 0 30px; width: 30px; height: 30px; border-radius: 8px;
+        background: var(--panel-2); border: 1px solid var(--line);
+        display: grid; place-items: center; color: var(--accent);
+      }
+      .whatsnew-list .wn-ico svg { width: 16px; height: 16px; }
+      .whatsnew-list .wn-body { font-size: 13px; line-height: 1.45; }
+      .whatsnew-list .wn-body strong { display: block; color: var(--text); margin-bottom: 1px; }
+      .whatsnew-list .wn-body span { color: var(--muted); }
+      .whatsnew-list .wn-body .wn-note { color: var(--accent-2); }
+      .modal-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; }
+      .whatsnew-dismiss {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 12.5px; color: var(--muted); cursor: pointer; user-select: none;
+      }
+      .whatsnew-dismiss input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+      .modal-foot button.primary { width: auto; padding: 9px 20px; }
+
     </style>
   </head>
   <body>
@@ -274,8 +310,13 @@
       </div>
 
       <div class="section">
-        <div class="label">Keycap size</div>
+        <div class="label">Keycap</div>
         <div class="field">
+          <label for="profileSelect">Profile</label>
+          <select id="profileSelect" aria-label="Keycap profile"></select>
+        </div>
+        <div class="field">
+          <label for="unitSelect">Size</label>
           <select id="unitSelect" aria-label="Keycap size"></select>
         </div>
       </div>
@@ -440,6 +481,31 @@
         <a href="https://github.com/vostoklabs/svg-keycap-generator/blob/main/LICENSE.md" target="_blank" rel="noopener">License</a>
       </div>
     </aside>
+
+    <div id="whatsNew" class="modal-overlay" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="whatsNewTitle">
+        <h2 id="whatsNewTitle">What's new</h2>
+        <p class="modal-sub">A few additions since you were last here:</p>
+        <ul class="whatsnew-list">
+          <li>
+            <span class="wn-ico" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+            <span class="wn-body"><strong>Low-profile keycaps</strong><span>Pick Standard or Low profile in the Keycap section, then choose your size.</span></span>
+          </li>
+          <li>
+            <span class="wn-ico" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg></span>
+            <span class="wn-body"><strong>Single-color printing</strong><span>The new “Single color, recessed legend” toggle engraves the legend into the cap so the whole key prints in one filament.</span></span>
+          </li>
+          <li>
+            <span class="wn-ico" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="2.5"/></svg></span>
+            <span class="wn-body"><strong>Homing bump</strong><span>Add the little locator bump (think F &amp; J) to any key. <span class="wn-note">Keys with a homing bump must be printed face-up.</span></span></span>
+          </li>
+        </ul>
+        <div class="modal-foot">
+          <label class="whatsnew-dismiss"><input id="whatsNewHide" type="checkbox" /> Don't show this again</label>
+          <button id="whatsNewClose" class="primary" type="button">Got it</button>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="/src/main.js"></script>
   </body>

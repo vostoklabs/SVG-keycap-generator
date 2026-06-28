@@ -62,11 +62,21 @@ straight after install.
 <summary>Regenerating the keycap meshes (advanced)</summary>
 
 The cap meshes are tessellated from STEP files with `npm run convert`. The source CAD is
-**not** tracked in the repo — only the generated `public/keycaps/*.json` are. To add or
-change a size, drop `.stp` / `.step` files into `Step files of keycaps/` and re-run the
-script; the unit and variant are read from the file name (e.g. `6,5 u spacebar.stp` →
-"6.5u Spacebar"). Each STEP should hold the cap shell plus its switch stem(s) as separate
-solids.
+**not** tracked in the repo — only the generated `public/keycaps/**.json` are. STEP files are
+grouped by **profile** sub-folder, with the shared homing bump at the top level:
+
+```
+Step files of keycaps/
+├─ Standard profile/   1 u.stp, 1,25 u.stp, … 6,5 u spacebar.stp
+├─ Low profile/        1 u.stp, 1,25 u.stp, … 6,5 u spacebar.stp
+└─ Homing bump.stp
+```
+
+To add or change a size, drop `.stp` / `.step` files into the relevant profile folder and
+re-run the script; the unit and variant are read from the file name (e.g. `6,5 u spacebar.stp`
+→ "6.5u Spacebar"), and each sub-folder becomes a profile in the dropdown. Each STEP should
+hold the cap shell plus its switch stem(s) as separate solids. The converter writes
+`public/keycaps/<profile>/<id>.json` and a `public/keycaps/index.json` manifest the app reads.
 </details>
 
 ## License & credits

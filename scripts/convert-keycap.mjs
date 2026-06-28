@@ -1,15 +1,24 @@
 // Convert the keycap STEP files to indexed meshes + metadata the web app loads.
 // Run with: npm run convert   (re-run whenever you add/replace a .stp in the folder)
 //
-// Each STEP is expected to hold the cap SHELL (walls + dished top, hollow underneath)
-// plus one or more switch STEMs. Shell and stems are emitted as separate bodies so the
-// app can recolour the stem(s) on their own (shine-through mode). The shell goes in the
-// top-level positions/indices (back-compat with the dev test scripts); the stem(s) merge
-// into `stem`. A single-solid STEP still works — everything becomes the shell, no stem.
+// Layout of `Step files of keycaps/`:
+//   <Profile name>/<size>.stp   one sub-folder per keycap PROFILE ("Standard profile",
+//                               "Low profile", …); each holds the same set of sizes.
+//   Homing bump.stp             a single shared bump (profile-independent) at the top level.
+// (If there are no sub-folders, every top-level .stp is treated as one implicit profile —
+//  the pre-profiles layout still converts.)
 //
-// Every .stp/.step in `Step files of keycaps/` becomes one public/keycaps/<id>.json, and
-// a public/keycaps/index.json manifest lists them (id, label, file) for the size dropdown.
-// public/keycap.json is also written as the default unit so the dev scripts keep working.
+// Each cap STEP holds the cap SHELL (walls + dished top, hollow underneath) plus one or more
+// switch STEMs. Shell and stems are emitted as separate bodies so the app can recolour the
+// stem(s) on their own (shine-through mode). The shell goes in the top-level positions/indices
+// (back-compat with the dev test scripts); the stem(s) merge into `stem`. A single-solid STEP
+// still works — everything becomes the shell, no stem.
+//
+// Output:
+//   public/keycaps/<profileId>/<id>.json   one mesh file per size, per profile
+//   public/keycaps/homing-bump.json        the shared bump
+//   public/keycaps/index.json              manifest: profiles -> sizes (drives the dropdowns)
+//   public/keycap.json                     default profile's default size (dev scripts/back-compat)
 import { readFileSync, writeFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve, basename } from 'node:path';
@@ -20,17 +29,43 @@ const root = resolve(__dirname, '..');
 const stepDir = join(root, 'Step files of keycaps');
 const outDir = join(root, 'public', 'keycaps');
 
-// --- locate the .stp/.step files ---
-let stepFiles;
+// --- locate the .stp/.step files, grouped by profile sub-folder ---
+const isStep = (f) => /\.(stp|step)$/i.test(f);
+let rootEntries;
 try {
-  stepFiles = readdirSync(stepDir).filter((f) => /\.(stp|step)$/i.test(f));
+  rootEntries = readdirSync(stepDir, { withFileTypes: true });
 } catch {
   console.error(`Folder not found: ${stepDir}`);
   process.exit(1);
 }
-if (!stepFiles.length) {
-  console.error(`No .stp/.step files in ${stepDir}`);
+
+const subDirs = rootEntries.filter((e) => e.isDirectory()).map((e) => e.name);
+const topFiles = rootEntries.filter((e) => e.isFile() && isStep(e.name)).map((e) => e.name);
+
+// The shared homing bump lives at the top level (one file, profile-independent).
+const homingFile = topFiles.find((f) => /homing\s*bump/i.test(f));
+const topCaps = topFiles.filter((f) => f !== homingFile);
+
+// Each sub-folder is a profile; if there are none, fall back to the old flat layout where
+// every top-level cap is one implicit "Standard" profile.
+const profileDirs = subDirs.length
+  ? subDirs.map((name) => ({ name, dir: join(stepDir, name) }))
+  : topCaps.length
+    ? [{ name: 'Standard', dir: stepDir }]
+    : [];
+
+if (!profileDirs.length) {
+  console.error(`No keycap .stp/.step files found under ${stepDir}`);
   process.exit(1);
+}
+
+// "Standard profile" -> { id: 'standard-profile', label: 'Standard profile' }
+// (sentence-cased so the dropdown reads naturally next to its "Profile" label).
+function parseProfileName(folder) {
+  const clean = folder.trim().replace(/\s+/g, ' ');
+  const id = clean.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'profile';
+  const label = clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+  return { id, label };
 }
 
 // Derive a unit, a friendly label, a URL-safe id and a sort key from the file name.
@@ -184,35 +219,64 @@ function convertStep(stepPath, stepFile) {
 
 mkdirSync(outDir, { recursive: true });
 
-const manifest = [];
-for (const stepFile of stepFiles) {
-  const info = parseKeycapName(stepFile);
-  console.log(`Reading ${stepFile}  ->  ${info.id} ("${info.label}")`);
-  const { out } = convertStep(join(stepDir, stepFile), stepFile);
-  writeFileSync(join(outDir, `${info.id}.json`), JSON.stringify(out));
-  if (!info.isHomingBump) {
-    manifest.push({ ...info, file: `keycaps/${info.id}.json`, out });
-  }
-}
-
-// Order the dropdown: by unit, then plain < stem-count variants < spacebar.
-manifest.sort((a, b) =>
+// Order sizes within a profile: by unit, then plain < stem-count variants < spacebar.
+const sortSizes = (a, b) =>
   a.unit - b.unit ||
   Number(a.isSpacebar) - Number(b.isSpacebar) ||
-  a.stemCount - b.stemCount
-);
+  a.stemCount - b.stemCount;
 
-// Default = the 1u cap if present, else the first entry.
-const defaultEntry = manifest.find((e) => e.id === '1u') || manifest[0];
+// Convert each profile's caps into public/keycaps/<profileId>/<id>.json.
+const profiles = [];
+for (const { name, dir } of profileDirs) {
+  const { id: profileId, label: profileLabel } = parseProfileName(name);
+  const capFiles = (dir === stepDir ? topCaps : readdirSync(dir).filter(isStep));
+  if (!capFiles.length) {
+    console.warn(`(skipping empty profile "${name}")`);
+    continue;
+  }
+  mkdirSync(join(outDir, profileId), { recursive: true });
+  console.log(`\nProfile "${name}"  ->  ${profileId} ("${profileLabel}")`);
+
+  const sizes = [];
+  for (const stepFile of capFiles) {
+    const info = parseKeycapName(stepFile);
+    console.log(`  Reading ${stepFile}  ->  ${info.id} ("${info.label}")`);
+    const { out } = convertStep(join(dir, stepFile), stepFile);
+    writeFileSync(join(outDir, profileId, `${info.id}.json`), JSON.stringify(out));
+    sizes.push({ ...info, file: `keycaps/${profileId}/${info.id}.json`, out });
+  }
+  sizes.sort(sortSizes);
+  const profileDefault = (sizes.find((s) => s.id === '1u') || sizes[0]).id;
+  profiles.push({ id: profileId, label: profileLabel, default: profileDefault, sizes });
+}
+
+// Convert the shared homing bump once (profile-independent), if present.
+if (homingFile) {
+  console.log(`\nReading ${homingFile}  ->  homing-bump (shared)`);
+  const { out } = convertStep(join(stepDir, homingFile), homingFile);
+  writeFileSync(join(outDir, 'homing-bump.json'), JSON.stringify(out));
+}
+
+// Standard profile leads the dropdown; everything else follows alphabetically.
+const isStd = (p) => /standard/i.test(p.id) || /standard/i.test(p.label);
+profiles.sort((a, b) => Number(isStd(b)) - Number(isStd(a)) || a.label.localeCompare(b.label));
+const defaultProfile = profiles[0];
 
 const index = {
-  default: defaultEntry.id,
-  keycaps: manifest.map(({ id, label, file, unit }) => ({ id, label, file, unit })),
+  defaultProfile: defaultProfile.id,
+  profiles: profiles.map((p) => ({
+    id: p.id,
+    label: p.label,
+    default: p.default,
+    keycaps: p.sizes.map(({ id, label, file, unit }) => ({ id, label, file, unit })),
+  })),
 };
 writeFileSync(join(outDir, 'index.json'), JSON.stringify(index, null, 2));
 
-// Keep public/keycap.json as the default unit (dev scripts + back-compat).
-writeFileSync(join(root, 'public', 'keycap.json'), JSON.stringify(defaultEntry.out));
+// Keep public/keycap.json as the default profile's default size (dev scripts + back-compat).
+const defaultSize = defaultProfile.sizes.find((s) => s.id === defaultProfile.default) || defaultProfile.sizes[0];
+writeFileSync(join(root, 'public', 'keycap.json'), JSON.stringify(defaultSize.out));
 
-console.log(`\nWrote ${manifest.length} keycaps to public/keycaps/ + index.json`);
-console.log(`Default: ${defaultEntry.id} (also public/keycap.json)`);
+const totalCaps = profiles.reduce((n, p) => n + p.sizes.length, 0);
+console.log(`\nWrote ${totalCaps} keycaps across ${profiles.length} profile(s) to public/keycaps/ + index.json`);
+console.log(`Default: ${defaultProfile.id}/${defaultProfile.default} (also public/keycap.json)`);
