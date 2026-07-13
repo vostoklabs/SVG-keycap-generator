@@ -69,15 +69,20 @@ function parseProfileName(folder) {
 }
 
 // Derive a unit, a friendly label, a URL-safe id and a sort key from the file name.
-// Examples: "1 u" -> 1u · "1,25 u" -> 1.25u · "2 u, 3 stems" -> 2u (3 stems) ·
-//           "6,5 u spacebar" -> 6.5u Spacebar
+// The unit token ("<n> u") may sit anywhere in the name, and either word order works, so
+// both "6,5 u spacebar" and "spacebar 6,5u" parse the same. Examples:
+//   "1 u" / "1u"          -> 1u
+//   "1,25 u"              -> 1.25u
+//   "2u 3 stem"           -> 2u (3 stems)
+//   "spacebar 6,25u"      -> 6.25u Spacebar
 function parseKeycapName(file) {
   const base = basename(file).replace(/\.(stp|step)$/i, '');
   if (/homing\s*bump/i.test(base)) {
     return { id: 'homing-bump', label: 'Homing Bump', unit: 0, isSpacebar: false, stemCount: 0, isHomingBump: true };
   }
-  // Leading number uses comma as the decimal separator ("1,25 u").
-  const m = base.match(/^\s*(\d+(?:,\d+)?)\s*u/i);
+  // Find the "<number> u" token wherever it appears; comma is the decimal separator ("1,25 u").
+  // The (?![a-z]) guard keeps the "u" from matching inside a word (e.g. "unit").
+  const m = base.match(/(\d+(?:,\d+)?)\s*u(?![a-z])/i);
   const unit = m ? parseFloat(m[1].replace(',', '.')) : 0;
   const unitStr = m ? m[1].replace(',', '.') : '?';
 

@@ -190,6 +190,34 @@
       .switch-block .switch-row { margin-top: 0; }
       .switch-help { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 8px 0 0; }
 
+      /* Stem fit: a distinct bordered card with a − [value] + stepper, so it doesn't read
+         as just another placement slider. */
+      .fit-block {
+        margin-top: 14px; padding: 11px 12px 12px;
+        background: var(--panel-2); border: 1px solid var(--line);
+        border-left: 3px solid var(--accent); border-radius: 8px;
+      }
+      .fit-head {
+        font-size: 11px; text-transform: uppercase; letter-spacing: .6px;
+        color: var(--muted); margin-bottom: 9px;
+      }
+      .tol-stepper { display: flex; align-items: center; gap: 8px; }
+      .tol-btn {
+        flex: 0 0 auto; width: 40px; height: 32px; padding: 0;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: var(--panel); border: 1px solid var(--line); border-radius: 7px;
+        color: var(--text); font-size: 19px; line-height: 1; cursor: pointer;
+        transition: border-color .12s, color .12s, background .12s;
+      }
+      .tol-btn:hover { border-color: var(--accent); color: var(--accent); }
+      .tol-btn:active { background: var(--panel-2); }
+      .tol-val {
+        flex: 1; text-align: center; font-size: 14px; color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+      .fit-help { font-size: 12px; color: var(--muted); line-height: 1.45; margin: 9px 0 0; }
+      .fit-help strong { color: var(--text); }
+
       /* Section header with an inline reset control */
       .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
       .section-head .label { margin-bottom: 0; }
@@ -358,6 +386,15 @@
           <input id="offyNum" type="number" step="0.1" />
           <span class="unit">mm</span>
         </div>
+        <div class="fit-block">
+          <div class="fit-head">Stem fit tolerance</div>
+          <div class="tol-stepper">
+            <button id="stemTolMinus" class="tol-btn" type="button" aria-label="Tighter stem">−</button>
+            <span class="tol-val" id="stemTolVal">0.00 mm</span>
+            <button id="stemTolPlus" class="tol-btn" type="button" aria-label="Looser stem">+</button>
+          </div>
+          <p class="fit-help">How tightly the stem grips the switch. Press <strong>+</strong> if the keycap is too hard to push on, <strong>−</strong> if it feels loose. 0 = as designed.</p>
+        </div>
         <div class="switch-row">
           <span class="switch-label">Mirror horizontally</span>
           <label class="toggle"><input id="mirror" type="checkbox" /><span class="slider"></span></label>
@@ -489,15 +526,11 @@
         <ul class="whatsnew-list">
           <li>
             <span class="wn-ico" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
-            <span class="wn-body"><strong>Low-profile keycaps</strong><span>Pick Standard or Low profile in the Keycap section, then choose your size.</span></span>
+            <span class="wn-body"><strong>Thocky profile</strong><span>A new keycap profile — pick it in the Keycap → Profile dropdown alongside Standard and Low.</span></span>
           </li>
           <li>
-            <span class="wn-ico" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg></span>
-            <span class="wn-body"><strong>Single-color printing</strong><span>The new “Single color, recessed legend” toggle engraves the legend into the cap so the whole key prints in one filament.</span></span>
-          </li>
-          <li>
-            <span class="wn-ico" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="2.5"/></svg></span>
-            <span class="wn-body"><strong>Homing bump</strong><span>Add the little locator bump (think F &amp; J) to any key. <span class="wn-note">Keys with a homing bump must be printed face-up.</span></span></span>
+            <span class="wn-ico" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+            <span class="wn-body"><strong>Stem fit tolerance</strong><span>A new “Stem fit” slider under Placement &amp; size loosens or tightens how the stem grips the switch — nudge up if the cap is too tight, down if it's loose.</span></span>
           </li>
         </ul>
         <div class="modal-foot">

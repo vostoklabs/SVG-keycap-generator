@@ -5,6 +5,7 @@ import { parseSvg, logoFootprint } from './logo.js';
 import { FONT_OPTIONS, importFontFile, parseLetter, loadBundledFonts } from './letter.js';
 import { buildBodies } from './geometry.js';
 import { initManifold, geomToManifold, manifoldToGeom, creaseNormals } from './manifold.js';
+import { scaleStemComponentsXY } from './meshUtils.js';
 import { buildThreeMF } from './export3mf.js';
 import { LUCIDE_ICONS, buildSvg, svgDataUrl } from './lucideIcons.js';
 import { zipSync } from 'fflate';
@@ -111,6 +112,25 @@ function updateStemMaterial() {
   stemMesh.material = $('through').checked ? logoMat : capMat;
 }
 
+// Rebuild the working stem from the authored one at the current fit tolerance, refreshing
+// the preview. `stemGeometry` (used by both exports) is the scaled body; at 0 tolerance it
+// IS the base solid (no copy). Safe to call before C exists (falls back to 0 tolerance).
+function applyStemTolerance() {
+  const prev = stemGeometry;
+  if (!baseStemGeometry) {
+    stemGeometry = null;
+  } else {
+    const tol = stemTolValue;
+    stemGeometry = Math.abs(tol) > 1e-4
+      ? scaleStemComponentsXY(baseStemGeometry, tol)
+      : baseStemGeometry;
+  }
+  if (prev && prev !== baseStemGeometry && prev !== stemGeometry) prev.dispose();
+  stemMesh.geometry?.dispose();
+  stemMesh.geometry = stemGeometry ? creaseNormals(stemGeometry) : undefined;
+  updateStemMaterial();
+}
+
 function resize() {
   const w = viewport.clientWidth;
   const h = viewport.clientHeight;
@@ -139,7 +159,8 @@ new ResizeObserver(resize).observe(viewport);
 // ---------------------------------------------------------------- state
 let meta = null;            // keycap metadata from convert step
 let shellGeometry = null;   // cap shell geometry, stem removed (native mm)
-let stemGeometry = null;    // switch stem body (constant; recoloured, never carved)
+let baseStemGeometry = null;// switch stem as authored (clean solid); source for the tolerance scale
+let stemGeometry = null;    // stem after fit-tolerance scaling — the body used for preview + export
 let homingBumpGeometry = null; // homing bump geometry
 let currentLegend = null;   // { contours, box, name }
 let lastBodies = null;      // { keycapGeometry, logoGeometry } for export
@@ -177,6 +198,22 @@ const C = {
   offx: link('offx', 'offxNum', scheduleRegen),
   offy: link('offy', 'offyNum', scheduleRegen),
 };
+
+// Stem fit stepper (− / +): a signed mm offset that rescales only the stem body (no cap CSG
+// rebuild), so it lives outside `C` and drives applyStemTolerance directly.
+let stemTolValue = 0;
+const STEM_TOL_MIN = -0.4, STEM_TOL_MAX = 0.4, STEM_TOL_STEP = 0.02;
+function renderStemTol() {
+  const v = stemTolValue;
+  $('stemTolVal').textContent = `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(2)} mm`;
+}
+function setStemTol(v) {
+  stemTolValue = Math.round(Math.min(STEM_TOL_MAX, Math.max(STEM_TOL_MIN, v)) * 100) / 100;
+  renderStemTol();
+}
+$('stemTolMinus').addEventListener('click', () => { setStemTol(stemTolValue - STEM_TOL_STEP); applyStemTolerance(); });
+$('stemTolPlus').addEventListener('click', () => { setStemTol(stemTolValue + STEM_TOL_STEP); applyStemTolerance(); });
+renderStemTol();
 $('mirror').addEventListener('change', scheduleRegen);
 $('homingBump').addEventListener('change', scheduleRegen);
 // Shine-through and single-colour are mutually exclusive: one prints the legend in a second
@@ -196,7 +233,7 @@ $('logoColor').addEventListener('input', () => { logoMat.color.set($('logoColor'
 // Stock values for the per-section reset buttons. `size` is replaced at boot
 // once we know the sensible default for this cap's geometry.
 const DEFAULTS = {
-  size: 8, depth: 0.5, rot: 0, offx: 0, offy: 0,
+  size: 8, depth: 0.5, rot: 0, offx: 0, offy: 0, stemTol: 0,
   mirror: false, through: false, single: false, homingBump: false,
   capColor: '#1c1c1e', logoColor: '#f2f2f2',
 };
@@ -217,6 +254,8 @@ function resetPlacement() {
   C.rot.set(DEFAULTS.rot);
   C.offx.set(DEFAULTS.offx);
   C.offy.set(DEFAULTS.offy);
+  setStemTol(DEFAULTS.stemTol);
+  applyStemTolerance();
   $('mirror').checked = DEFAULTS.mirror;
   $('through').checked = DEFAULTS.through;
   $('single').checked = DEFAULTS.single;
@@ -759,7 +798,10 @@ function setNudgeRange(rangeId, numId, m) {
 function setKeycap(kc) {
   // Free everything tied to the previous cap before swapping references.
   shellGeometry?.dispose();
-  stemGeometry?.dispose();
+  if (stemGeometry && stemGeometry !== baseStemGeometry) stemGeometry.dispose();
+  baseStemGeometry?.dispose();
+  stemGeometry = null;
+  baseStemGeometry = null;
   capMesh.geometry?.dispose();
   stemMesh.geometry?.dispose();
 
@@ -768,18 +810,14 @@ function setKeycap(kc) {
   capMesh.geometry = shellGeometry.clone(); // shown until the first regen carves it
 
   // Run the stem(s) through Manifold once so they're a watertight, welded, manifold solid
-  // (the raw STEP tessellation has split vertices) — clean for both preview and 3MF.
+  // (the raw STEP tessellation has split vertices) — clean base for the fit-tolerance scale.
   if (kc.stemGeometry) {
     const m = geomToManifold(kc.stemGeometry);
-    stemGeometry = manifoldToGeom(m); // clean indexed solid kept for export
+    baseStemGeometry = manifoldToGeom(m); // clean indexed solid, as authored
     m.delete();
     kc.stemGeometry.dispose();
-    stemMesh.geometry = creaseNormals(stemGeometry); // creased copy for preview
-  } else {
-    stemGeometry = null;
-    stemMesh.geometry = undefined;
   }
-  updateStemMaterial();
+  applyStemTolerance(); // derive stemGeometry + preview at the current fit tolerance
 
   // Centre every cap on the world origin so it sits on the grid regardless of its native
   // STEP coordinates (the larger caps are modelled off-origin). The group holds cap + legend
@@ -886,7 +924,7 @@ unitSelect.addEventListener('change', () => {
 // Shows on every visit until the user ticks "Don't show this again". Bump
 // WHATS_NEW_VERSION whenever the notes change so the popup resurfaces for everyone.
 (function whatsNew() {
-  const WHATS_NEW_VERSION = '2026-06-low-profile';
+  const WHATS_NEW_VERSION = '2026-07-thocky-stem';
   const KEY = 'keycap_whatsnew_dismissed';
   const overlay = $('whatsNew');
   if (!overlay) return;
