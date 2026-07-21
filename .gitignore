@@ -9,3 +9,9 @@ Step files of keycaps/
 
 # Full-res originals for the README shots; web-optimized copies live in docs/.
 Media/
+
+# MakerWorld SDK — proprietary/NDA material, never commit.
+Makerworlf SDK example/
+Makerworld SDK example/
+**/makerworld-sdk/
+__MACOSX/

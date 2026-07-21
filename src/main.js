@@ -23,7 +23,6 @@ function setStatus(msg, kind = '') {
 const viewport = $('viewport');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setClearColor(0x3a3f47); // grey viewport so the cap + grid read clearly
 viewport.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -39,58 +38,21 @@ const fill = new THREE.DirectionalLight(0x9fb6ff, 0.5);
 fill.position.set(-18, 10, -14);
 scene.add(fill);
 
-// Infinite ground grid: a big camera-following plane whose shader draws grid lines from
-// world XZ and fades with distance, so it reads as endless at any cap size (1u .. spacebar).
-const GRID_MINOR = 5, GRID_MAJOR = 25, GRID_EXTENT = 12000;
-const gridMat = new THREE.ShaderMaterial({
-  transparent: true,
-  depthWrite: false,
-  extensions: { derivatives: true }, // fwidth (no-op/core on WebGL2)
-  uniforms: {
-    uColor:  { value: new THREE.Color(0x4d535d) },
-    uColor2: { value: new THREE.Color(0x626a76) },
-    uSize1:  { value: GRID_MINOR },
-    uSize2:  { value: GRID_MAJOR },
-    uFade:   { value: 120 },
-    uCam:    { value: new THREE.Vector3() },
-  },
-  vertexShader: `
-    varying vec3 vWorld;
-    void main() {
-      vec4 wp = modelMatrix * vec4(position, 1.0);
-      vWorld = wp.xyz;
-      gl_Position = projectionMatrix * viewMatrix * wp;
-    }
-  `,
-  fragmentShader: `
-    precision highp float;
-    varying vec3 vWorld;
-    uniform vec3 uColor; uniform vec3 uColor2;
-    uniform float uSize1; uniform float uSize2; uniform float uFade;
-    uniform vec3 uCam;
-    float gridLine(vec2 p, float size) {
-      vec2 r = p / size;
-      vec2 g = abs(fract(r - 0.5) - 0.5) / fwidth(r);
-      return 1.0 - min(min(g.x, g.y), 1.0);
-    }
-    void main() {
-      vec2 p = vWorld.xz;
-      float d = 1.0 - clamp(length(p - uCam.xz) / uFade, 0.0, 1.0);
-      float g1 = gridLine(p, uSize1);
-      float g2 = gridLine(p, uSize2);
-      float a = max(g1 * 0.45, g2) * pow(d, 2.0);
-      if (a <= 0.001) discard;
-      vec3 col = mix(uColor, uColor2, step(0.5, g2));
-      gl_FragColor = vec4(col, a);
-    }
-  `,
-});
-const grid = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), gridMat);
-grid.rotation.x = -Math.PI / 2;
-grid.scale.set(GRID_EXTENT, GRID_EXTENT, 1);
-grid.frustumCulled = false;
-grid.renderOrder = -1;
-scene.add(grid);
+// Ground grid + background — same look as the clicker & keychain apps, and
+// theme-aware: brand-blue centre lines over grey grid on a dark/light backdrop.
+// 10 mm cells, large enough to sit well past any cap size (1u … spacebar).
+let grid = null;
+function applyViewportTheme(theme) {
+  const isLight = theme === 'light';
+  renderer.setClearColor(isLight ? 0xf3f4f6 : 0x15171c);
+  if (grid) { scene.remove(grid); grid.geometry.dispose(); }
+  grid = new THREE.GridHelper(400, 40, isLight ? 0x2563eb : 0x5b9dff, isLight ? 0xd1d5db : 0x2f3440);
+  grid.renderOrder = -1;
+  // Draw the grid first and skip depth-writes so the opaque cap always wins.
+  (Array.isArray(grid.material) ? grid.material : [grid.material]).forEach((m) => { m.depthWrite = false; });
+  scene.add(grid);
+}
+applyViewportTheme(document.documentElement.getAttribute('data-theme') || 'dark');
 
 // Native keycap space is Z-up; rotate the display group so it looks right in Y-up.
 const group = new THREE.Group();
@@ -143,16 +105,6 @@ new ResizeObserver(resize).observe(viewport);
 (function animate() {
   requestAnimationFrame(animate);
   controls.update();
-  // Follow the camera (snapped to the major spacing) and fade relative to zoom so the
-  // grid always extends past the cap, whether it's a 1u or a 6.5u spacebar.
-  const dist = camera.position.distanceTo(controls.target);
-  gridMat.uniforms.uFade.value = Math.max(dist * 3, 60);
-  gridMat.uniforms.uCam.value.copy(camera.position);
-  grid.position.set(
-    Math.round(camera.position.x / GRID_MAJOR) * GRID_MAJOR,
-    0,
-    Math.round(camera.position.z / GRID_MAJOR) * GRID_MAJOR
-  );
   renderer.render(scene, camera);
 })();
 
@@ -920,6 +872,104 @@ unitSelect.addEventListener('change', () => {
   }
 });
 
+// ------------------------------------------------------- quality callout (dismissable)
+(function initQualityCallout() {
+  const callout = $('qualityCallout');
+  if (!callout) return;
+  const KEY = 'keycap_quality_callout';
+  try { if (localStorage.getItem(KEY) === 'dismissed') { callout.hidden = true; return; } } catch {}
+  $('qualityCalloutDismiss')?.addEventListener('click', () => {
+    callout.hidden = true;
+    try { localStorage.setItem(KEY, 'dismissed'); } catch {}
+  });
+})();
+
+// ------------------------------------------------------- theme toggle
+const themeToggle = $('themeToggle');
+const themeLabel = $('themeLabel');
+function syncThemeLabel() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  themeLabel.textContent = isLight ? 'Dark mode' : 'Light mode';
+}
+if (themeToggle) {
+  themeToggle.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme');
+    const next = current === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('keycap_theme', next);
+    applyViewportTheme(next);
+    syncThemeLabel();
+  });
+  syncThemeLabel();
+}
+
+// ------------------------------------------------------- save/load project
+$('saveProj')?.addEventListener('click', () => {
+  const projectState = {
+    size: parseFloat($('size').value),
+    depth: parseFloat($('depth').value),
+    rot: parseFloat($('rot').value),
+    offx: parseFloat($('offx').value),
+    offy: parseFloat($('offy').value),
+    capColor: $('capColor').value,
+    logoColor: $('logoColor').value,
+    mirror: $('mirror').checked,
+    homingBump: $('homingBump').checked,
+    through: $('through').checked,
+    single: $('single').checked,
+    profile: $('profileSelect').value,
+    unit: $('unitSelect').value,
+  };
+  if (currentLegend) projectState.legend = currentLegend;
+  const blob = new Blob([JSON.stringify(projectState, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'keycap-project.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  setStatus('Project saved ✓');
+});
+
+$('loadProj')?.addEventListener('click', () => $('projFile').click());
+$('projFile')?.addEventListener('change', () => {
+  const f = $('projFile').files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const loaded = JSON.parse(reader.result);
+      if (loaded.size != null) { $('size').value = loaded.size; $('sizeNum').value = loaded.size; }
+      if (loaded.depth != null) { $('depth').value = loaded.depth; $('depthNum').value = loaded.depth; }
+      if (loaded.rot != null) { $('rot').value = loaded.rot; $('rotNum').value = loaded.rot; }
+      if (loaded.offx != null) { $('offx').value = loaded.offx; $('offxNum').value = loaded.offx; }
+      if (loaded.offy != null) { $('offy').value = loaded.offy; $('offyNum').value = loaded.offy; }
+      if (loaded.capColor) { $('capColor').value = loaded.capColor; capMat.color.set(loaded.capColor); }
+      if (loaded.logoColor) { $('logoColor').value = loaded.logoColor; logoMat.color.set(loaded.logoColor); }
+      if (loaded.mirror != null) $('mirror').checked = loaded.mirror;
+      if (loaded.homingBump != null) $('homingBump').checked = loaded.homingBump;
+      if (loaded.through != null) $('through').checked = loaded.through;
+      if (loaded.single != null) $('single').checked = loaded.single;
+      if (loaded.profile) $('profileSelect').value = loaded.profile;
+      if (loaded.unit) $('unitSelect').value = loaded.unit;
+      // Trigger UI sync
+      $('size').dispatchEvent(new Event('input'));
+      $('profileSelect').dispatchEvent(new Event('change'));
+      applyModeFlags();
+      setStatus('Project loaded ✓');
+    } catch {
+      setStatus('Failed to load project file', 'err');
+    }
+  };
+  reader.readAsText(f);
+  $('projFile').value = '';
+});
+
+// ------------------------------------------------------- help dialog
+$('helpToggle')?.addEventListener('click', () => {
+  const overlay = $('whatsNew');
+  if (overlay) overlay.hidden = false;
+});
+
 // ------------------------------------------------------- "what's new" modal
 // Shows on every visit until the user ticks "Don't show this again". Bump
 // WHATS_NEW_VERSION whenever the notes change so the popup resurfaces for everyone.
@@ -1007,4 +1057,38 @@ unitSelect.addEventListener('change', () => {
     console.error(e);
     setStatus(e.message || 'Failed to load.', 'err');
   }
+})();
+
+// ---------------------------------------------------------------- help tooltips
+// A single bubble reused by every ".help-badge". Appended to <body> so the right
+// sidebar's overflow:hidden never clips it. Shown on hover/focus of a badge.
+(function initHelpTips() {
+  const bubble = document.createElement('div');
+  bubble.className = 'help-tip-bubble';
+  bubble.hidden = true;
+  document.body.appendChild(bubble);
+
+  function show(badge) {
+    const tip = badge.getAttribute('data-tip');
+    if (!tip) return;
+    bubble.textContent = tip;
+    bubble.hidden = false;
+    const r = badge.getBoundingClientRect();
+    const b = bubble.getBoundingClientRect();
+    let left = r.left + r.width / 2 - b.width / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - b.width - 8));
+    let top = r.top - b.height - 8;
+    if (top < 8) top = r.bottom + 8; // flip below if there's no room above
+    bubble.style.left = `${left}px`;
+    bubble.style.top = `${top}px`;
+  }
+  const hide = () => { bubble.hidden = true; };
+
+  document.querySelectorAll('.help-badge').forEach((badge) => {
+    badge.addEventListener('mouseenter', () => show(badge));
+    badge.addEventListener('mouseleave', hide);
+    badge.addEventListener('focus', () => show(badge));
+    badge.addEventListener('blur', hide);
+    badge.addEventListener('click', (e) => e.preventDefault());
+  });
 })();

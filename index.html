@@ -3,9 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <title>Keycap Legend Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+    <script>
+      (function() {
+        var saved = localStorage.getItem('keycap_theme');
+        var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var theme = saved || (systemDark ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
     <style>
       :root {
+        --font-display: 'Chakra Petch', system-ui, -apple-system, sans-serif;
         --bg: #15171c;
         --panel: #1d2027;
         --panel-2: #252932;
@@ -15,21 +28,73 @@
         --accent: #5b9dff;
         --accent-2: #36c08a;
       }
+      :root[data-theme="light"] {
+        color-scheme: light;
+        --bg: #f3f4f6;
+        --panel: #ffffff;
+        --panel-2: #edf0f5;
+        --line: #d1d5db;
+        --text: #1f2937;
+        --muted: #6b7280;
+        --accent: #2563eb;
+        --accent-2: #10b981;
+      }
       * { box-sizing: border-box; }
       html, body { margin: 0; height: 100%; }
       body {
         background: var(--bg);
         color: var(--text);
         font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-        display: grid;
-        grid-template-columns: 300px 1fr 340px;
-        grid-template-rows: 100vh;
+        display: flex;
+        flex-direction: column;
         overflow: hidden;
       }
-      #viewport { position: relative; min-width: 0; overflow: hidden; background: #3a3f47; }
+      /* The three panels sit below the topbar and fill the rest of the height. */
+      .app-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 22vw 1fr 24.2vw;
+        overflow: hidden;
+      }
+      /* Topbar — GitHub + commercial license on the left, Donate on the right.
+         Same structure/colours as the clicker & keychain apps. */
+      #topbar {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 16px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+      }
+      .topbar-group { display: flex; align-items: center; gap: 8px; }
+      .donate-label { color: var(--muted); font-size: 14px; margin-right: 2px; }
+      .topbar-btn {
+        display: inline-flex; align-items: center; gap: 7px;
+        padding: 6px 12px; border-radius: 9px;
+        border: 1px solid var(--line); background: var(--panel-2);
+        color: var(--text); font-size: 14px; font-weight: 500;
+        text-decoration: none; cursor: pointer;
+        transition: border-color .12s, color .12s, background .12s;
+      }
+      .topbar-btn svg { flex: 0 0 auto; }
+      .topbar-btn:hover { border-color: var(--accent); color: var(--accent); }
+      .topbar-license, .donate-kofi {
+        background: #ef4444; border-color: #ef4444; color: #fff; font-weight: 700;
+      }
+      .topbar-license:hover, .donate-kofi:hover {
+        background: #dc2626; border-color: #dc2626; color: #fff;
+      }
+      .donate-makerworld {
+        background: #16a34a; border-color: #16a34a; color: #fff; font-weight: 600;
+      }
+      .donate-makerworld:hover { background: #15803d; border-color: #15803d; color: #fff; }
+      #viewport { position: relative; min-width: 0; overflow: hidden; background: #15171c; }
       #viewport canvas { display: block; width: 100%; height: 100%; }
       #hint {
-        position: absolute; left: 14px; bottom: 12px; color: var(--muted);
+        position: absolute; right: 14px; bottom: 12px; color: var(--muted);
         font-size: 12px; pointer-events: none; user-select: none;
       }
       #busy {
@@ -45,16 +110,41 @@
         flex-direction: column;
       }
       .sidebar.left { border-right: 1px solid var(--line); overflow-y: auto; }
-      .sidebar.right { border-left: 1px solid var(--line); overflow: hidden; }
-      /* The Legend section absorbs spare height so the right panel never scrolls as a whole;
-         only its icon gallery scrolls internally. Colors/Export/Support stay pinned below. */
-      .legend-section { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-      #iconPanel:not([hidden]) { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-      h1 { font-size: 15px; margin: 0 0 2px; letter-spacing: .2px; }
-      .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+      /* Both sidebars scroll as a whole so nothing is clipped on short screens; the
+         icon/upload galleries keep their own capped scroll area inside the flow. */
+      .sidebar.right { border-left: 1px solid var(--line); overflow-y: auto; }
+      /* Thin scrollbars — same look as the keychain generator. */
+      .sidebar { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+      .sidebar::-webkit-scrollbar { width: 10px; }
+      .sidebar::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; border: 3px solid var(--panel); }
+      .sidebar::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+      .sidebar::-webkit-scrollbar-track { background: transparent; }
+      .legend-section { display: flex; flex-direction: column; }
+      #iconPanel:not([hidden]) { display: flex; flex-direction: column; }
+      h1 { font-family: var(--font-display); font-size: 19px; margin: 0 0 2px; letter-spacing: .2px; font-weight: 600; }
+      .app-header {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+        margin-bottom: 4px;
+      }
+      .app-subtitle { color: var(--muted); font-size: 15px; margin: 2px 0 0; font-weight: 400; line-height: 1.35; }
+      .app-credit { color: var(--muted); font-size: 14px; margin: 2px 0 0; }
+      .app-credit-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 500;
+        vertical-align: middle;
+      }
+      .app-credit-link:hover { text-decoration: underline; }
+      .credit-logo { width: 15px; height: 15px; flex: 0 0 15px; }
       .section { border-top: 1px solid var(--line); padding: 14px 0; }
       .section:first-of-type { border-top: none; padding-top: 0; }
-      .label { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 8px; }
+      .label { font-family: var(--font-display); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
       .tabs {
         display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px;
         background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 4px;
@@ -66,16 +156,16 @@
       .tab.active { background: var(--accent); color: #08122a; font-weight: 600; }
       .mode-panel[hidden] { display: none; }
 
-      .sublabel { font-size: 11px; color: var(--muted); margin: 0 0 6px; letter-spacing: .3px; }
+      .sublabel { font-family: var(--font-display); font-size: 11px; color: var(--muted); margin: 0 0 6px; letter-spacing: .3px; font-weight: 600; }
       .hint-link { color: var(--accent); text-decoration: none; }
       .hint-link:hover { text-decoration: underline; }
       .hint-text {
         font-size: 12px; color: var(--muted); margin: 0 0 10px; line-height: 1.4;
       }
-      #uploadPanel:not([hidden]) { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+      #uploadPanel:not([hidden]) { display: flex; flex-direction: column; }
       #uploadGallery {
         display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px;
-        flex: 0 1 auto; min-height: 0; overflow-y: auto; align-content: start; padding-right: 4px;
+        max-height: 30vh; overflow-y: auto; align-content: start; padding-right: 4px;
       }
       #uploadGallery::-webkit-scrollbar { width: 8px; }
       #uploadGallery::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
@@ -98,7 +188,7 @@
       #iconCount { font-size: 11px; color: var(--muted); margin: 0 0 8px; }
       #gallery {
         display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
-        flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px;
+        max-height: 42vh; overflow-y: auto; padding-right: 4px;
         align-content: start;
       }
       #gallery::-webkit-scrollbar { width: 8px; }
@@ -190,6 +280,28 @@
       .switch-block .switch-row { margin-top: 0; }
       .switch-help { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 8px 0 0; }
 
+      /* Inline "?" help badge — reveals its explanation in a hover/focus bubble so the
+         longer descriptions no longer take up permanent vertical space. */
+      .help-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 15px; height: 15px; margin-left: 6px; padding: 0; flex: 0 0 15px;
+        border: 1px solid var(--line); border-radius: 50%;
+        background: var(--panel-2); color: var(--muted);
+        font: inherit; font-size: 10px; font-weight: 700; line-height: 1;
+        cursor: help; vertical-align: middle; transition: color .12s, border-color .12s;
+      }
+      .help-badge:hover, .help-badge:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+      /* Shared tooltip bubble (appended to <body> so the sidebar's overflow never clips it). */
+      .help-tip-bubble {
+        position: fixed; z-index: 200; max-width: 244px;
+        background: var(--panel-2); border: 1px solid var(--line);
+        color: var(--text); font-size: 12px; line-height: 1.45;
+        padding: 8px 10px; border-radius: 8px;
+        box-shadow: 0 10px 30px rgba(0,0,0,.55);
+        pointer-events: none;
+      }
+      .help-tip-bubble[hidden] { display: none; }
+
       /* Stem fit: a distinct bordered card with a − [value] + stepper, so it doesn't read
          as just another placement slider. */
       .fit-block {
@@ -198,8 +310,9 @@
         border-left: 3px solid var(--accent); border-radius: 8px;
       }
       .fit-head {
+        font-family: var(--font-display);
         font-size: 11px; text-transform: uppercase; letter-spacing: .6px;
-        color: var(--muted); margin-bottom: 9px;
+        color: var(--muted); margin-bottom: 9px; font-weight: 600;
       }
       .tol-stepper { display: flex; align-items: center; gap: 8px; }
       .tol-btn {
@@ -233,13 +346,23 @@
 
       /* MakerWorld quality tip */
       .callout {
+        position: relative;
         display: flex; gap: 9px; align-items: flex-start;
         background: var(--panel-2); border: 1px solid var(--line);
         border-left: 3px solid var(--accent-2); border-radius: 8px;
-        padding: 10px 11px; margin-bottom: 16px;
+        padding: 10px 30px 10px 11px; margin-bottom: 16px;
         font-size: 12.5px; line-height: 1.45; color: var(--text);
       }
-      .callout svg { flex: 0 0 16px; width: 16px; height: 16px; color: var(--accent-2); margin-top: 1px; }
+      .callout[hidden] { display: none; }
+      .callout > svg { flex: 0 0 16px; width: 16px; height: 16px; color: var(--accent-2); margin-top: 1px; }
+      .callout-dismiss {
+        position: absolute; top: 5px; right: 6px;
+        width: 20px; height: 20px; padding: 0; line-height: 1;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: transparent; border: none; border-radius: 5px;
+        color: var(--muted); font-size: 17px; cursor: pointer;
+      }
+      .callout-dismiss:hover { color: var(--text); background: var(--panel); }
 
       /* Support section */
       .support-text { font-size: 12.5px; color: var(--text); line-height: 1.45; margin-bottom: 10px; }
@@ -270,24 +393,69 @@
       .footer-credits .sep { margin: 0 6px; opacity: .45; }
 
       button.primary {
-        width: 100%; padding: 11px; border: none; border-radius: 9px; cursor: pointer;
-        background: var(--accent); color: #08122a; font-weight: 600; font-size: 14px;
+        display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+        width: 100%; padding: 11px 16px; border: none; border-radius: 6px; cursor: pointer;
+        background: var(--accent); color: var(--accent-text); font-weight: 600; font-size: 15px;
+        transition: filter .12s;
       }
       button.primary:hover { filter: brightness(1.07); }
-      button.primary:disabled { opacity: .5; cursor: default; }
+      button.primary:disabled { opacity: .45; cursor: not-allowed; filter: none; }
       button.secondary {
-        width: 100%; padding: 10px; margin-top: 8px; border-radius: 9px; cursor: pointer;
+        width: 100%; padding: 9px 10px; border-radius: 6px; cursor: pointer;
         background: transparent; color: var(--text); border: 1px solid var(--line);
-        font: inherit; font-weight: 600; font-size: 13px;
+        font: inherit; font-weight: 500; font-size: 14px;
         transition: border-color .12s, color .12s;
+        display: inline-flex; align-items: center; justify-content: center; gap: 7px;
       }
       button.secondary:hover { border-color: var(--accent); color: var(--accent); }
-      button.secondary:disabled { opacity: .5; cursor: default; }
-      #status { margin-top: 10px; font-size: 12px; color: var(--muted); min-height: 16px; }
+      button.secondary:disabled { opacity: .45; cursor: not-allowed; }
+      #status { position: absolute; left: 14px; bottom: 32px; font-size: 12px; color: var(--muted); min-height: 16px; margin: 0; pointer-events: none; user-select: none; }
       #status.warn { color: #e3b341; }
       #status.err { color: #f0726a; }
-      .meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+      .meta { position: absolute; left: 14px; bottom: 12px; font-size: 11px; color: var(--muted); margin: 0; pointer-events: none; user-select: none; }
       code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+
+      .sidebar-sticky-footer {
+        margin-top: auto;
+        position: sticky;
+        bottom: -16px;
+        margin-left: -16px;
+        margin-right: -16px;
+        margin-bottom: -16px;
+        background: var(--panel);
+        padding: 16px 20px 20px;
+        border-top: 1px solid var(--line);
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      #projectSettingsContainer {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .btn-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .footer-utility-row { margin-top: 0; }
+      .utility-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        padding: 9px 10px;
+        font-size: 14px;
+        font-weight: 500;
+        border-radius: 6px;
+      }
+      .utility-btn svg, button.secondary svg { flex: 0 0 auto; width: 16px; height: 16px; }
+      #themeToggle svg { display: none; }
+      :root[data-theme="dark"] #themeToggle svg.icon-sun,
+      :root:not([data-theme="light"]) #themeToggle svg.icon-sun { display: block; }
+      :root[data-theme="light"] #themeToggle svg.icon-moon { display: block; }
 
       /* "What's new" modal — centered overlay shown on load until dismissed */
       .modal-overlay {
@@ -328,13 +496,52 @@
     </style>
   </head>
   <body>
+    <header id="topbar">
+      <div class="topbar-group topbar-left">
+        <a class="topbar-btn" href="https://github.com/vostoklabs/svg-keycap-generator" target="_blank" rel="noopener noreferrer">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+          View on GitHub
+        </a>
+        <a class="topbar-btn topbar-license" href="https://makerworld.com/en/@Vostok_Labs#commercial-membership-open" target="_blank" rel="noopener noreferrer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10"/><path d="M7 12h6"/><circle cx="16.5" cy="14.5" r="2.5"/><path d="m15 17-1 4 2.5-1.5L19 21l-1-4"/></svg>
+          Get commercial license
+        </a>
+      </div>
+      <div class="topbar-group topbar-right">
+        <span class="donate-label">Donate:</span>
+        <a class="topbar-btn donate-makerworld" href="https://makerworld.com/en/models/2959969" target="_blank" rel="noopener noreferrer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Boost on MakerWorld
+        </a>
+        <a class="topbar-btn donate-kofi" href="https://ko-fi.com/vostoklabs" target="_blank" rel="noopener noreferrer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+          Ko-fi
+        </a>
+      </div>
+    </header>
+    <div class="app-body">
     <aside class="sidebar left">
-      <h1>Keycap Legend Generator</h1>
-      <div class="sub">Pick an icon or letter, size it, export a two-color 3MF.</div>
+      <div class="app-header">
+        <h1>Keycap Legend Generator</h1>
+        <p class="app-subtitle">Pick an icon or letter, size it, export a two-color 3MF.</p>
+        <p class="app-credit">Made by
+          <a class="app-credit-link" href="https://makerworld.com/en/@Vostok_Labs" target="_blank" rel="noopener noreferrer">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 568.55431 524.21602" fill="none" stroke="currentColor" stroke-width="20" class="credit-logo" aria-hidden="true">
+              <path d="M385.471,8.276 h171.043 l-194.874,507.665 h-165.99 l82.995,-229.373 z"/>
+              <path d="M255.292,225.733 l-82.995,229.373 l-23.352,-60.835 l82.995,-229.373 z"/>
+              <path d="M208.588,104.064 l-82.995,229.373 l-23.352,-60.835 l82.995,-229.373 z"/>
+              <path d="M152.519,8.276 l-73.63,203.492 l-23.352,-60.835 l51.618,-142.657 z"/>
+              <path d="M61.79,8.276 l-29.606,81.823 l-23.352,-60.835 l7.594,-20.988 z"/>
+            </svg>
+            Vostok Labs
+          </a>
+        </p>
+      </div>
 
-      <div class="callout">
+      <div class="callout" id="qualityCallout">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
         <span>For the best quality printed keycap, please use the print profile and instructions available on <a class="hint-link" href="https://makerworld.com/en/models/2959969" target="_blank" rel="noopener">MakerWorld</a>.</span>
+        <button class="callout-dismiss" id="qualityCalloutDismiss" type="button" aria-label="Dismiss">&times;</button>
       </div>
 
       <div class="section">
@@ -405,17 +612,15 @@
         </div>
         <div class="switch-block">
           <div class="switch-row">
-            <span class="switch-label">Shine through</span>
+            <span class="switch-label">Shine through<button class="help-badge" type="button" aria-label="What does shine through do?" data-tip="Carves the icon all the way through the top of the keycap and prints the stem in the legend colour too. Print the legend and stem in transparent plastic (PLA or PETG) so the icon lights up.">?</button></span>
             <label class="toggle"><input id="through" type="checkbox" /><span class="slider"></span></label>
           </div>
-          <p class="switch-help">Carves the icon all the way through the top of the keycap and prints the stem in the legend colour too. Print the legend and stem in transparent plastic (PLA or PETG) so the icon lights up.</p>
         </div>
         <div class="switch-block">
           <div class="switch-row">
-            <span class="switch-label">Single color, recessed legend</span>
+            <span class="switch-label">Single color, recessed legend<button class="help-badge" type="button" aria-label="What does single color, recessed legend do?" data-tip="Engraves the icon as a recess into the top of the cap instead of a separate-colour body, so the whole keycap prints in one filament. Depth sets how deep the legend is carved.">?</button></span>
             <label class="toggle"><input id="single" type="checkbox" /><span class="slider"></span></label>
           </div>
-          <p class="switch-help">Engraves the icon as a recess into the top of the cap instead of a separate-colour body, so the whole keycap prints in one filament. Depth sets how deep the legend is carved.</p>
         </div>
       </div>
     </aside>
@@ -423,6 +628,8 @@
     <div id="viewport">
       <div id="busy">generating…</div>
       <div id="hint">drag to orbit · scroll to zoom · right-drag to pan</div>
+      <div id="status">Loading…</div>
+      <div class="meta" id="meta"></div>
     </div>
 
     <aside class="sidebar right">
@@ -488,36 +695,38 @@
           <div class="color"><input id="capColor" type="color" value="#1c1c1e" /> Keycap</div>
           <div class="color"><input id="logoColor" type="color" value="#f2f2f2" /> Legend</div>
         </div>
+        <button id="exportBlank" class="secondary" type="button" disabled style="width:100%; margin-top:20px;">Export blank keycap</button>
       </div>
 
-      <div class="section">
-        <button id="export" class="primary" disabled>Export 3MF</button>
-        <button id="exportBlank" class="secondary" type="button" disabled>Export blank keycap</button>
-        <div id="status">Loading…</div>
-        <div class="meta" id="meta"></div>
-      </div>
-
-      <div class="section">
-        <p class="support-free">You can support me for free by <a href="https://makerworld.com/en/models/2959969" target="_blank" rel="noopener">downloading the model on MakerWorld</a>, giving it a like and a boost, and <a href="https://makerworld.com/en/@Vostok_Labs" target="_blank" rel="noopener">following my page on MakerWorld</a>.</p>
-        <div class="support-text">Or buy me a Ko-fi ☕</div>
-        <a class="kofi-btn" href="https://ko-fi.com/vostoklabs" target="_blank" rel="noopener">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M18 8h1a4 4 0 0 1 0 8h-1"/>
-            <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z"/>
-            <line x1="6" y1="2" x2="6" y2="4"/>
-            <line x1="10" y1="2" x2="10" y2="4"/>
-            <line x1="14" y1="2" x2="14" y2="4"/>
-          </svg>
-          Buy me a Ko-fi
-        </a>
-      </div>
-
-      <div class="footer-credits">
-        Made by <a href="https://makerworld.com/en/@Vostok_Labs" target="_blank" rel="noopener">Vostok Labs</a>
-        <span class="sep">·</span>
-        <a href="https://github.com/vostoklabs/svg-keycap-generator/blob/main/LICENSE.md" target="_blank" rel="noopener">License</a>
+      <div class="sidebar-sticky-footer">
+        <button id="export" class="primary" disabled style="width:100%;">Download 3MF</button>
+        <div id="projectSettingsContainer">
+          <div class="btn-row">
+            <button id="saveProj" class="secondary utility-btn" type="button" aria-label="Save project">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              <span>Save project</span>
+            </button>
+            <button id="loadProj" class="secondary utility-btn" type="button" aria-label="Load project">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Load project</span>
+            </button>
+            <input type="file" id="projFile" accept="application/json" hidden />
+          </div>
+          <div class="btn-row footer-utility-row">
+            <button id="helpToggle" class="secondary utility-btn" type="button" aria-label="Show help">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>Help</span>
+            </button>
+            <button id="themeToggle" class="secondary utility-btn" type="button" aria-label="Toggle theme">
+              <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+              <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+              <span id="themeLabel">Light mode</span>
+            </button>
+          </div>
+        </div>
       </div>
     </aside>
+    </div><!-- .app-body -->
 
     <div id="whatsNew" class="modal-overlay" hidden>
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="whatsNewTitle">
